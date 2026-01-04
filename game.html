@@ -1,0 +1,1353 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dodge the Blocks: Stages (Supabase)</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; background: #0b0f1a; color: #e6e8ef;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif;
+      display: grid; place-items: center; min-height: 100vh;
+    }
+    .wrap { width: min(980px, 96vw); }
+    .row { display:flex; gap: 12px; flex-wrap: wrap; align-items: stretch; }
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 12px 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    .top { margin-bottom: 10px; }
+    .hud { flex: 1; min-width: 340px; }
+    .btns { display:flex; gap: 8px; flex-wrap: wrap; align-items:center; }
+    button, select, input {
+      appearance:none;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: #e6e8ef;
+      border-radius: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      font-weight: 800;
+      outline: none;
+    }
+    button:hover, select:hover { background: rgba(255,255,255,0.10); }
+    input { cursor:text; width: 220px; }
+    .hint { opacity: 0.85; font-size: 13px; line-height: 1.4; margin-top: 8px; }
+    kbd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(0,0,0,0.25);
+    }
+    canvas {
+      width: 100%;
+      height: auto;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: radial-gradient(900px 520px at 50% 0%, rgba(120,160,255,0.12), transparent 55%),
+                  linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      display:block;
+    }
+    .mini { font-size: 12px; opacity: .82; }
+    .pill {
+      display:inline-flex; gap:6px; align-items:center;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-weight: 900;
+      font-size: 12px;
+    }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .leaderboard { max-height: 200px; overflow:auto; }
+    .lbrow { display:flex; justify-content:space-between; gap: 10px; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .lbrow:last-child { border-bottom: none; }
+    .right { text-align:right; }
+    .warn { color: rgba(255,255,255,0.78); font-size: 12px; line-height: 1.35; margin-top: 10px; }
+    .tag {
+      display:inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      font-size: 11px;
+      font-weight: 900;
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top row">
+      <div class="card hud">
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:14px;opacity:.9;">Dodge the Blocks: Stages</div>
+            <div style="font-size:22px;font-weight:900;letter-spacing:.2px;">
+              Score: <span id="score">0</span>
+              <span style="font-size:14px;opacity:.75;font-weight:800;margin-left:10px;">
+                Best: <span id="best">0</span>
+              </span>
+            </div>
+            <div class="mini">
+              Stage <b id="stage">1</b> · <span id="phase">Waves</span>
+              <span style="margin-left:10px;">HP: <b id="hp">3</b></span>
+              <span style="margin-left:10px;">Rank view: <b id="rankViewLabel">Local</b></span>
+            </div>
+          </div>
+          <div class="btns">
+            <button id="homeBtn">Home</button>
+            <button id="startBtn">Start</button>
+            <button id="pauseBtn">Pause</button>
+            <button id="restartBtn">Restart</button>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:8px; align-items:center;">
+          <span class="pill">🛡 무적 <span id="invStat">0.0</span>s</span>
+          <span class="pill">🕒 슬로우 <span id="slowStat">0.0</span>s</span>
+          <span class="pill">💣 폭탄 <span id="bombStat">0</span></span>
+          <span class="pill">🎵 <span id="audioStat">Off</span></span>
+        </div>
+
+        <div class="hint">
+          이동: <kbd>←</kbd><kbd>→</kbd> 또는 <kbd>A</kbd><kbd>D</kbd> / 대시: <kbd>Shift</kbd><br/>
+          아이템: <kbd>1</kbd> 또는 <kbd>B</kbd> (폭탄) / 일시정지: <kbd>P</kbd> / 홈: <kbd>H</kbd><br/>
+          모바일: 화면 좌/우 터치 이동(길게 누르면 대시)
+        </div>
+      </div>
+
+      <div class="card" style="min-width: 340px; flex: 0.95;">
+        <div style="font-weight:900; margin-bottom: 8px;">Settings</div>
+
+        <div class="grid2">
+          <div>
+            <div class="mini" style="margin-bottom:6px;">Name</div>
+            <input id="nameInput" maxlength="12" placeholder="플레이어" />
+          </div>
+          <div>
+            <div class="mini" style="margin-bottom:6px;">Style</div>
+            <select id="styleSel">
+              <option value="neon" selected>Neon</option>
+              <option value="pixel">Pixel</option>
+              <option value="minimal">Minimal</option>
+            </select>
+          </div>
+          <div>
+            <div class="mini" style="margin-bottom:6px;">Audio</div>
+            <button id="audioBtn">Enable Audio</button>
+          </div>
+          <div>
+            <div class="mini" style="margin-bottom:6px;">Local Leaderboard</div>
+            <button id="clearLbBtn">Clear</button>
+          </div>
+        </div>
+
+        <div style="font-weight:900; margin-top:12px;">Account</div>
+        <div class="btns" style="margin-top:8px;">
+          <button id="guestBtn">Guest (익명)</button>
+          <button id="googleBtn">Google</button>
+          <button id="logoutBtn">Logout</button>
+          <span class="mini" id="authStatus" style="margin-left:6px;">Not signed in</span>
+        </div>
+
+        <div style="font-weight:900; margin-top:12px;">Leaderboard View</div>
+        <div class="btns" style="margin-top:8px;">
+          <button id="tabLocal">Local</button>
+          <button id="tabServer">Server</button>
+          <button id="tabCombined">Combined</button>
+          <button id="syncBtn">Sync</button>
+        </div>
+
+        <div id="leaderboard" class="leaderboard card" style="margin-top:10px; padding: 8px 10px;"></div>
+
+        <div class="warn">
+          <span class="tag">중요</span>
+          구글 로그인은 <b>file://</b>에서 잘 안 돼. 로컬 테스트는 <b>http://localhost</b>로 띄우는 걸 추천.
+          <br/>Edge Function URL/키는 아래 JS 설정값을 채워서 사용해.
+        </div>
+      </div>
+    </div>
+
+    <canvas id="c" width="980" height="560"></canvas>
+  </div>
+
+  <!-- Supabase JS (v2) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+  (() => {
+    // ============================================================
+    // ✅ Supabase 설정 (여기만 채우면 됨)
+    // ============================================================
+    const SUPABASE_URL = "https://jwkjsmlicirmuujsmdfi.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_YfPtLavytOMWG5gHr7pEDg_Dy3j8Wld";
+    const FUNCTION_URL = "https://jwkjsmlicirmuujsmdfi.supabase.co/functions/v1/leaderboard";
+
+    // ============================================================
+
+    // If you haven't deployed the Edge Function yet, server calls will fail (local still works).
+    const supabase = window.supabase?.createClient?.(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ===== Utils =====
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const randi = (a, b) => Math.floor(rand(a, b + 1));
+    const now = () => performance.now();
+    const lerp = (a,b,t) => a + (b-a)*t;
+
+    function escapeHTML(s) {
+      return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    // ===== DOM =====
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+
+    const scoreEl = document.getElementById("score");
+    const bestEl = document.getElementById("best");
+    const stageEl = document.getElementById("stage");
+    const phaseEl = document.getElementById("phase");
+    const hpEl = document.getElementById("hp");
+    const invStat = document.getElementById("invStat");
+    const slowStat = document.getElementById("slowStat");
+    const bombStat = document.getElementById("bombStat");
+    const audioStat = document.getElementById("audioStat");
+    const rankViewLabel = document.getElementById("rankViewLabel");
+
+    const startBtn = document.getElementById("startBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const restartBtn = document.getElementById("restartBtn");
+    const homeBtn = document.getElementById("homeBtn");
+
+    const audioBtn = document.getElementById("audioBtn");
+    const clearLbBtn = document.getElementById("clearLbBtn");
+    const nameInput = document.getElementById("nameInput");
+    const styleSel = document.getElementById("styleSel");
+    const leaderboardEl = document.getElementById("leaderboard");
+
+    const guestBtn = document.getElementById("guestBtn");
+    const googleBtn = document.getElementById("googleBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const authStatus = document.getElementById("authStatus");
+
+    const tabLocal = document.getElementById("tabLocal");
+    const tabServer = document.getElementById("tabServer");
+    const tabCombined = document.getElementById("tabCombined");
+    const syncBtn = document.getElementById("syncBtn");
+
+    // ===== Storage keys =====
+    const BEST_KEY = "dbs_best_v3";
+    const NAME_KEY = "dbs_name_v3";
+    const STYLE_KEY = "dbs_style_v3";
+    const LB_KEY = "dbs_lb_v3"; // local leaderboard
+
+    // ===== Styles =====
+    const Styles = {
+      neon: {
+        bgGridAlpha: 0.18,
+        playerFill: "rgba(140, 190, 255, 0.95)",
+        playerDashFill: "rgba(180, 255, 220, 0.95)",
+        blockFill: "rgba(255,255,255,0.86)",
+        bossFill: "rgba(255, 120, 200, 0.75)",
+        itemInv: "rgba(120, 255, 200, 0.9)",
+        itemSlow: "rgba(120, 190, 255, 0.9)",
+        itemBomb: "rgba(255, 210, 120, 0.9)",
+        text: "rgba(255,255,255,0.92)",
+        shadow: true,
+        pixel: false
+      },
+      minimal: {
+        bgGridAlpha: 0.10,
+        playerFill: "rgba(245,245,245,0.92)",
+        playerDashFill: "rgba(245,245,245,0.92)",
+        blockFill: "rgba(245,245,245,0.72)",
+        bossFill: "rgba(245,245,245,0.35)",
+        itemInv: "rgba(245,245,245,0.90)",
+        itemSlow: "rgba(245,245,245,0.90)",
+        itemBomb: "rgba(245,245,245,0.90)",
+        text: "rgba(255,255,255,0.92)",
+        shadow: false,
+        pixel: false
+      },
+      pixel: {
+        bgGridAlpha: 0.18,
+        playerFill: "rgba(140, 190, 255, 1)",
+        playerDashFill: "rgba(180, 255, 220, 1)",
+        blockFill: "rgba(255,255,255,1)",
+        bossFill: "rgba(255, 120, 200, 0.95)",
+        itemInv: "rgba(120, 255, 200, 1)",
+        itemSlow: "rgba(120, 190, 255, 1)",
+        itemBomb: "rgba(255, 210, 120, 1)",
+        text: "rgba(255,255,255,0.92)",
+        shadow: false,
+        pixel: true
+      }
+    };
+    let style = Styles.neon;
+
+    function applyStyle(name) {
+      style = Styles[name] || Styles.neon;
+      localStorage.setItem(STYLE_KEY, name);
+      ctx.imageSmoothingEnabled = !style.pixel;
+      draw();
+    }
+
+    // ===== Audio (WebAudio synth) =====
+    let audioOn = false;
+    let audioCtx = null;
+    let bgmTimer = null;
+    let bgmStep = 0;
+
+    const SFX = {
+      click:  { f: 520, d: 0.06, type: "square" },
+      hit:    { f: 140, d: 0.12, type: "sawtooth" },
+      pickup: { f: 740, d: 0.08, type: "triangle" },
+      bomb:   { f: 90,  d: 0.18, type: "sine" },
+      win:    { f: 980, d: 0.12, type: "triangle" },
+      over:   { f: 180, d: 0.20, type: "sawtooth" },
+    };
+
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+    }
+
+    function beep({f=440, d=0.08, type="sine", g=0.05}={}) {
+      if (!audioOn) return;
+      ensureAudio();
+      const t0 = audioCtx.currentTime;
+      const o = audioCtx.createOscillator();
+      const a = audioCtx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f, t0);
+
+      a.gain.setValueAtTime(0.0001, t0);
+      a.gain.exponentialRampToValueAtTime(g, t0 + 0.01);
+      a.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+
+      o.connect(a).connect(audioCtx.destination);
+      o.start(t0);
+      o.stop(t0 + d + 0.02);
+    }
+
+    function setAudio(on) {
+      audioOn = on;
+      audioStat.textContent = on ? "On" : "Off";
+      audioBtn.textContent = on ? "Disable Audio" : "Enable Audio";
+      if (on) startBGM(); else stopBGM();
+      beep(SFX.click);
+    }
+
+    function startBGM() {
+      stopBGM();
+      if (!audioOn) return;
+
+      bgmStep = 0;
+      const schedule = () => {
+        const tempo = (mode === "BOSS") ? 150 : 210;
+        if (bgmTimer) clearInterval(bgmTimer);
+        bgmTimer = setInterval(() => {
+          const scale = (mode === "BOSS")
+            ? [392, 440, 523, 587, 659, 587, 523, 440]
+            : [262, 330, 392, 330, 294, 330, 392, 440];
+          beep({ f: scale[bgmStep % scale.length], d: 0.07, type: "triangle", g: 0.03 });
+          bgmStep++;
+        }, tempo);
+      };
+      schedule();
+      // every 1s reschedule to follow mode changes
+      const modeWatcher = setInterval(() => {
+        if (!audioOn) { clearInterval(modeWatcher); return; }
+        schedule();
+      }, 1000);
+    }
+
+    function stopBGM() {
+      if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; }
+    }
+
+    // ===== Local leaderboard =====
+    function loadLB() {
+      try { return JSON.parse(localStorage.getItem(LB_KEY) || "[]"); }
+      catch { return []; }
+    }
+    function saveLB(lb) { localStorage.setItem(LB_KEY, JSON.stringify(lb)); }
+
+    function addLocalRecord(name, score, stage) {
+      const lb = loadLB();
+      lb.push({ name, score, stage, ts: Date.now() });
+      lb.sort((a,b) => b.score - a.score);
+      saveLB(lb.slice(0, 50));
+    }
+
+    function renderLocalList(list, title="Local Top") {
+      if (!list?.length) return `<div class="mini">${title}: 기록 없음</div>`;
+      return `
+        <div class="mini" style="margin-bottom:6px; opacity:.85;">${title}</div>
+        ${list.slice(0,10).map((r,i)=>`
+          <div class="lbrow">
+            <div><b>${i+1}.</b> ${escapeHTML(r.name || "Player")}</div>
+            <div class="right">
+              <div><b>${r.score}</b> pts</div>
+              <div class="mini">Stage ${r.stage}</div>
+            </div>
+          </div>
+        `).join("")}
+      `;
+    }
+
+    function renderServerList(list, title="Server Top") {
+      if (!list?.length) return `<div class="mini">${title}: 데이터 없음(로그인/서버 확인)</div>`;
+      return `
+        <div class="mini" style="margin-bottom:6px; opacity:.85;">${title}</div>
+        ${list.slice(0,10).map((r,i)=>`
+          <div class="lbrow">
+            <div><b>${i+1}.</b> ${escapeHTML(r.name || "Player")}</div>
+            <div class="right">
+              <div><b>${r.score}</b> pts</div>
+              <div class="mini">Stage ${r.stage}</div>
+            </div>
+          </div>
+        `).join("")}
+      `;
+    }
+
+    // ===== Supabase Auth + Edge Function calls =====
+    let lbView = "LOCAL"; // LOCAL | SERVER | COMBINED
+    let serverCache = [];
+    let myCache = [];
+
+    async function refreshAuthUI() {
+      if (!supabase) {
+        authStatus.textContent = "Supabase not configured";
+        return;
+      }
+      const { data } = await supabase.auth.getSession();
+      const session = data?.session;
+
+      if (!session) {
+        authStatus.textContent = "Not signed in";
+        return;
+      }
+      const user = session.user;
+      const provider = user.app_metadata?.provider || "anonymous";
+      authStatus.textContent = `Signed in: ${provider} (${user.id.slice(0, 6)}…)`;
+    }
+
+    async function callFn(body) {
+      if (!supabase) throw new Error("Supabase not configured");
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) throw new Error("로그인이 필요해(게스트/구글)");
+
+      const res = await fetch(FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          "apikey": SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j?.ok !== true) throw new Error(j?.error || "Request failed");
+      return j.data;
+    }
+
+    async function serverSubmit(name, score, stage) {
+      await callFn({ action: "submit", name, score, stage });
+    }
+    async function serverTop(limit = 10) {
+      return await callFn({ action: "top", limit });
+    }
+    async function serverMine(limit = 5) {
+      return await callFn({ action: "my", limit });
+    }
+
+    async function refreshServerLeaderboard() {
+      try {
+        if (!supabase) return;
+        const { data } = await supabase.auth.getSession();
+        if (!data?.session) {
+          serverCache = [];
+          myCache = [];
+          renderLeaderboardView();
+          return;
+        }
+        serverCache = await serverTop(10);
+        myCache = await serverMine(5);
+        renderLeaderboardView();
+      } catch (e) {
+        console.log(e);
+        serverCache = [];
+        myCache = [];
+        renderLeaderboardView();
+      }
+    }
+
+    function renderLeaderboardView() {
+      const local = loadLB();
+      rankViewLabel.textContent =
+        lbView === "LOCAL" ? "Local" : lbView === "SERVER" ? "Server" : "Combined";
+
+      if (lbView === "LOCAL") {
+        leaderboardEl.innerHTML = renderLocalList(local, "Local Top 10");
+        return;
+      }
+      if (lbView === "SERVER") {
+        leaderboardEl.innerHTML =
+          renderServerList(serverCache, "Server Top 10") +
+          `<div style="height:10px;"></div>` +
+          renderServerList(myCache, "My recent (server)");
+        return;
+      }
+      // COMBINED
+      leaderboardEl.innerHTML =
+        renderServerList(serverCache, "Server Top 10") +
+        `<div style="height:10px;"></div>` +
+        renderLocalList(local, "Your Local Top 10");
+    }
+
+    // ===== Game world =====
+    const W = canvas.width;
+    const H = canvas.height;
+
+    // Screens: HOME, PLAY, OVER
+    let screen = "HOME";
+    // Phases: WAVES, BOSS
+    let mode = "WAVES";
+
+    const player = {
+      x: W/2, y: H - 58,
+      w: 38, h: 16,
+      speed: 380,
+      dashMul: 1.85,
+      dash: false,
+      hpMax: 3,
+      hp: 3,
+      invT: 0,
+      slowT: 0,
+      bombs: 1,
+    };
+
+    let obstacles = [];  // falling blocks / bullets
+    let pickups = [];    // items
+    let particles = [];
+    let boss = null;
+
+    let running = false;
+    let paused = false;
+    let gameOver = false;
+
+    let score = 0;
+    let best = Number(localStorage.getItem(BEST_KEY) || 0);
+    bestEl.textContent = best;
+
+    let stage = 1;
+    let stageTime = 0;
+    let spawnTimer = 0;
+    let pickupTimer = 0;
+    let shakeT = 0;
+
+    // ===== Difficulty =====
+    function stageConfig(s) {
+      const waveDuration = clamp(18 + s * 1.0, 18, 40);
+      const baseSpawn = clamp(0.75 - s * 0.04, 0.24, 0.75);
+      const fallSpeed = clamp(170 + s * 22, 170, 680);
+      const blockW = clamp(76 - s * 2.2, 26, 76);
+      const pickupEvery = clamp(7.5 - s * 0.25, 3.5, 7.5);
+      return { waveDuration, baseSpawn, fallSpeed, blockW, pickupEvery };
+    }
+
+    function bossConfig(s) {
+      const hp = 12 + s * 4;
+      const fireEvery = clamp(0.55 - s * 0.03, 0.18, 0.55);
+      const bulletSpeed = clamp(210 + s * 18, 210, 590);
+      return { hp, fireEvery, bulletSpeed };
+    }
+
+    function pickBossPattern(s) {
+      const list = ["SPREAD", "SINE", "AIMED", "RINGS"];
+      if (s <= 2) return list[randi(0,1)];
+      if (s <= 4) return list[randi(0,2)];
+      return list[randi(0,3)];
+    }
+
+    // ===== Input =====
+    const keys = new Set();
+    window.addEventListener("keydown", (e) => {
+      const k = e.key.toLowerCase();
+      keys.add(k);
+
+      if (k === "p") togglePause();
+      if (k === "h") goHome();
+      if (screen === "HOME" && (k === "enter" || k === " ")) startGame();
+      if (gameOver && k === "r") restartGame();
+
+      if ((k === "1" || k === "b") && screen === "PLAY") useBomb();
+    });
+    window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+
+    // Mobile touch: left/right, long press dash
+    let touchSide = 0;
+    let touchDash = false;
+    let touchStartTime = 0;
+
+    canvas.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = t.clientX - rect.left;
+      touchSide = x < rect.width/2 ? -1 : 1;
+      touchStartTime = now();
+      touchDash = false;
+      if (screen === "HOME") startGame();
+    }, { passive:false });
+
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      if (!e.touches.length) return;
+      const t = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = t.clientX - rect.left;
+      touchSide = x < rect.width/2 ? -1 : 1;
+      if (!touchDash && now() - touchStartTime > 240) touchDash = true;
+    }, { passive:false });
+
+    canvas.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      touchSide = 0;
+      touchDash = false;
+    }, { passive:false });
+
+    // ===== Entities =====
+    function rectsOverlap(a, b) {
+      return (
+        a.x - a.w/2 < b.x + b.w/2 &&
+        a.x + a.w/2 > b.x - b.w/2 &&
+        a.y - a.h/2 < b.y + b.h/2 &&
+        a.y + a.h/2 > b.y - b.h/2
+      );
+    }
+
+    function burst(x, y, n) {
+      for (let i=0; i<n; i++) {
+        particles.push({
+          x, y,
+          vx: rand(-240, 240),
+          vy: rand(-300, -70),
+          life: rand(0.35, 0.90),
+          t: 0
+        });
+      }
+    }
+
+    function spawnFallingBlock(cfg) {
+      const w = cfg.blockW * rand(0.75, 1.25);
+      const h = rand(12, 18);
+      const x = rand(w/2 + 14, W - w/2 - 14);
+      obstacles.push({
+        kind: "BLOCK",
+        x, y: -30, w, h,
+        vy: cfg.fallSpeed * rand(0.9, 1.15),
+        vx: rand(-20, 20)
+      });
+    }
+
+    function spawnBullet(x, y, vx, vy) {
+      obstacles.push({
+        kind: "BULLET",
+        x, y,
+        w: rand(14, 18),
+        h: rand(10, 14),
+        vx, vy
+      });
+    }
+
+    function spawnPickup() {
+      const types = ["INV", "SLOW", "BOMB"];
+      const t = (stage <= 2)
+        ? (Math.random() < 0.45 ? "INV" : (Math.random() < 0.75 ? "SLOW" : "BOMB"))
+        : types[randi(0,2)];
+
+      pickups.push({
+        kind: t,
+        x: rand(30, W - 30),
+        y: -20,
+        r: 10,
+        vy: rand(110, 160)
+      });
+    }
+
+    function fireBoss(b) {
+      const sp = b.bulletSpeed;
+      const baseY = b.y + 18;
+      const px = player.x;
+
+      if (b.pattern === "SPREAD") {
+        const n = 6;
+        for (let i=0; i<n; i++) {
+          const ang = lerp(-0.85, 0.85, i/(n-1));
+          spawnBullet(b.x, baseY, Math.sin(ang)*sp*0.65, Math.cos(ang)*sp);
+        }
+      } else if (b.pattern === "SINE") {
+        const n = 5;
+        const t = now() * 0.002;
+        for (let i=0; i<n; i++) {
+          const off = (i - (n-1)/2) * 26;
+          const vx = Math.sin(t + i) * 110;
+          spawnBullet(b.x + off, baseY, vx, sp);
+        }
+      } else if (b.pattern === "AIMED") {
+        const dx = (px - b.x);
+        const len = Math.max(1, Math.abs(dx));
+        const vx0 = clamp(dx / len, -1, 1) * sp * 0.55;
+        const n = 4;
+        for (let i=0; i<n; i++) {
+          const jitter = (i - (n-1)/2) * 0.12;
+          spawnBullet(b.x, baseY, vx0 + jitter*sp, sp);
+        }
+      } else if (b.pattern === "RINGS") {
+        const n = 9;
+        for (let i=0; i<n; i++) {
+          const ang = lerp(-1.15, 1.15, i/(n-1));
+          spawnBullet(b.x, baseY, Math.sin(ang)*sp*0.8, Math.cos(ang)*sp);
+        }
+      }
+    }
+
+    // ===== Items/Damage =====
+    function useBomb() {
+      if (player.bombs <= 0) return;
+      player.bombs -= 1;
+      bombStat.textContent = player.bombs;
+
+      // Clear most obstacles
+      obstacles = obstacles.filter(o => o.y < 0 || o.y > H + 60);
+      score += 90;
+      shakeT = 0.25;
+      burst(player.x, player.y - 30, 18);
+      beep(SFX.bomb);
+      updateHUD();
+    }
+
+    function pickupEffect(kind) {
+      if (kind === "INV") {
+        player.invT = Math.max(player.invT, 4.5);
+      } else if (kind === "SLOW") {
+        player.slowT = Math.max(player.slowT, 5.0);
+      } else if (kind === "BOMB") {
+        player.bombs = clamp(player.bombs + 1, 0, 3);
+      }
+      beep(SFX.pickup);
+      updateHUD();
+    }
+
+    function takeHit() {
+      if (player.invT > 0) return;
+      player.hp -= 1;
+      player.invT = 1.2;
+      shakeT = 0.18;
+      burst(player.x, player.y, 14);
+      beep(SFX.hit);
+      if (player.hp <= 0) endGame();
+      updateHUD();
+    }
+
+    // ===== Transitions =====
+    function resetRun() {
+      obstacles = [];
+      pickups = [];
+      particles = [];
+      boss = null;
+
+      score = 0;
+      stage = 1;
+      stageTime = 0;
+      spawnTimer = 0;
+      pickupTimer = 0;
+      shakeT = 0;
+
+      player.x = W/2;
+      player.hp = player.hpMax;
+      player.invT = 0;
+      player.slowT = 0;
+      player.bombs = 1;
+
+      gameOver = false;
+      paused = false;
+      mode = "WAVES";
+      screen = "PLAY";
+
+      updateHUD();
+    }
+
+    function startGame() {
+      if (screen === "PLAY" && running) return;
+      beep(SFX.click);
+      resetRun();
+      running = true;
+      paused = false;
+      lastT = now();
+      requestAnimationFrame(loop);
+    }
+
+    function goHome() {
+      beep(SFX.click);
+      running = false;
+      paused = false;
+      gameOver = false;
+      screen = "HOME";
+      mode = "WAVES";
+      draw();
+    }
+
+    function togglePause() {
+      if (screen !== "PLAY") return;
+      paused = !paused;
+      beep(SFX.click);
+      if (!paused) {
+        lastT = now();
+        requestAnimationFrame(loop);
+      } else {
+        draw();
+      }
+    }
+
+    function restartGame() {
+      beep(SFX.click);
+      running = false;
+      paused = false;
+      gameOver = false;
+      startGame();
+    }
+
+    async function endGame() {
+      gameOver = true;
+      running = false;
+      paused = false;
+      screen = "OVER";
+
+      const nm = (nameInput.value || localStorage.getItem(NAME_KEY) || "Player").trim().slice(0,12) || "Player";
+      localStorage.setItem(NAME_KEY, nm);
+
+      // Local record always
+      addLocalRecord(nm, score, stage);
+
+      if (score > best) {
+        best = score;
+        localStorage.setItem(BEST_KEY, String(best));
+        bestEl.textContent = best;
+      }
+
+      burst(player.x, player.y, 30);
+      beep(SFX.over);
+
+      // Server submit if signed-in and server configured
+      try {
+        await serverSubmit(nm, score, stage);
+        await refreshServerLeaderboard();
+      } catch (e) {
+        // ignore (not signed in / server not ready)
+      }
+
+      renderLeaderboardView();
+      draw();
+    }
+
+    function winStage() {
+      beep(SFX.win);
+      stage += 1;
+      mode = "WAVES";
+      stageTime = 0;
+      spawnTimer = 0;
+      pickupTimer = 0;
+      obstacles = obstacles.filter(o => o.kind !== "BULLET");
+      boss = null;
+      player.bombs = clamp(player.bombs + 1, 0, 3);
+      shakeT = 0.18;
+      updateHUD();
+    }
+
+    function startBoss() {
+      mode = "BOSS";
+      stageTime = 0;
+      spawnTimer = 0;
+      const bc = bossConfig(stage);
+      boss = {
+        x: W/2, y: 92,
+        w: clamp(250 - stage * 4, 150, 250),
+        h: 36,
+        hp: bc.hp,
+        hpMax: bc.hp,
+        fireT: 0,
+        fireEvery: bc.fireEvery,
+        bulletSpeed: bc.bulletSpeed,
+        pattern: pickBossPattern(stage),
+        phaseT: 0
+      };
+      obstacles = obstacles.filter(o => o.kind === "BULLET");
+      pickups = [];
+      shakeT = 0.22;
+      updateHUD();
+    }
+
+    // ===== HUD =====
+    function updateHUD() {
+      scoreEl.textContent = score;
+      bestEl.textContent = best;
+      stageEl.textContent = stage;
+      phaseEl.textContent = (mode === "BOSS") ? `Boss (${boss?.pattern || ""})` : "Waves";
+      hpEl.textContent = player.hp;
+      invStat.textContent = player.invT.toFixed(1);
+      slowStat.textContent = player.slowT.toFixed(1);
+      bombStat.textContent = player.bombs;
+      audioStat.textContent = audioOn ? "On" : "Off";
+    }
+
+    // ===== Loop =====
+    let lastT = now();
+    function loop(t) {
+      if (!running || paused) return;
+      const dtReal = (t - lastT) / 1000;
+      lastT = t;
+
+      const slowFactor = (player.slowT > 0) ? 0.55 : 1.0;
+      const dt = dtReal * slowFactor;
+
+      update(dt, dtReal);
+      draw();
+
+      if (running) requestAnimationFrame(loop);
+    }
+
+    function update(dt, dtReal) {
+      if (screen !== "PLAY") return;
+
+      stageTime += dt;
+      score += Math.floor(dt * 10);
+      scoreEl.textContent = score;
+
+      player.invT = Math.max(0, player.invT - dtReal);
+      player.slowT = Math.max(0, player.slowT - dtReal);
+      if (shakeT > 0) shakeT = Math.max(0, shakeT - dtReal);
+
+      // movement
+      const left = keys.has("arrowleft") || keys.has("a") || touchSide === -1;
+      const right = keys.has("arrowright") || keys.has("d") || touchSide === 1;
+      const dashKey = keys.has("shift") || touchDash;
+      player.dash = dashKey;
+
+      const sp = player.speed * (player.dash ? player.dashMul : 1);
+      let vx = 0;
+      if (left) vx -= 1;
+      if (right) vx += 1;
+      player.x += vx * sp * dt;
+      player.x = clamp(player.x, player.w/2 + 14, W - player.w/2 - 14);
+
+      // phase logic
+      const cfg = stageConfig(stage);
+
+      if (mode === "WAVES") {
+        spawnTimer += dt;
+        pickupTimer += dt;
+
+        const spawnEvery = cfg.baseSpawn * rand(0.9, 1.1);
+        if (spawnTimer >= spawnEvery) {
+          spawnTimer = 0;
+          spawnFallingBlock(cfg);
+          if (stage >= 4 && Math.random() < 0.25) spawnFallingBlock(cfg);
+        }
+
+        if (pickupTimer >= cfg.pickupEvery) {
+          pickupTimer = 0;
+          if (Math.random() < 0.85) spawnPickup();
+        }
+
+        if (stageTime >= cfg.waveDuration) startBoss();
+      } else if (mode === "BOSS") {
+        if (boss) {
+          boss.phaseT += dt;
+          boss.x = W/2 + Math.sin(boss.phaseT * 0.9) * clamp(130 - stage*8, 40, 130);
+
+          boss.fireT += dt;
+          if (boss.fireT >= boss.fireEvery) {
+            boss.fireT = 0;
+            fireBoss(boss);
+          }
+
+          // Survival-based boss HP drain (간단 보스전)
+          boss.hp -= dt * (0.55 + stage * 0.06);
+          if (boss.hp <= 0) {
+            shakeT = 0.22;
+            burst(boss.x, boss.y, 28);
+            winStage();
+          }
+        }
+      }
+
+      // update obstacles
+      for (const o of obstacles) {
+        if (o.kind === "BLOCK") {
+          o.y += o.vy * dt;
+          o.x += (o.vx || 0) * dt;
+          if (o.x < o.w/2 + 12 || o.x > W - o.w/2 - 12) o.vx *= -1;
+        } else {
+          o.x += o.vx * dt;
+          o.y += o.vy * dt;
+        }
+      }
+      obstacles = obstacles.filter(o => o.y < H + 70 && o.y > -90 && o.x > -140 && o.x < W + 140);
+
+      // pickups
+      for (const p of pickups) p.y += p.vy * dt;
+      pickups = pickups.filter(p => p.y < H + 40);
+
+      // particles
+      for (const pt of particles) {
+        pt.t += dtReal;
+        pt.x += pt.vx * dtReal;
+        pt.y += pt.vy * dtReal;
+        pt.vy += 900 * dtReal;
+      }
+      particles = particles.filter(p => p.t < p.life);
+
+      // collisions
+      const pRect = { x: player.x, y: player.y, w: player.w, h: player.h };
+
+      for (const o of obstacles) {
+        const oRect = { x: o.x, y: o.y, w: o.w, h: o.h };
+        if (rectsOverlap(pRect, oRect)) {
+          takeHit();
+          if (o.kind === "BULLET") o.y = H + 999;
+          if (o.kind === "BLOCK" && stage >= 3) o.y = H + 999;
+          if (gameOver) return;
+        }
+      }
+
+      for (const p of pickups) {
+        const pr = { x: p.x, y: p.y, w: p.r*2, h: p.r*2 };
+        if (rectsOverlap(pRect, pr)) {
+          p.y = H + 999;
+          pickupEffect(p.kind);
+        }
+      }
+
+      updateHUD();
+    }
+
+    // ===== Render =====
+    function draw() {
+      ctx.save();
+
+      if (shakeT > 0) {
+        const s = shakeT * 10;
+        ctx.translate(rand(-s, s), rand(-s, s));
+      }
+
+      ctx.clearRect(0, 0, W, H);
+
+      // background grid
+      ctx.save();
+      ctx.globalAlpha = style.bgGridAlpha;
+      ctx.beginPath();
+      const step = style.pixel ? 36 : 40;
+      for (let x=20; x<W; x+=step) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+      for (let y=20; y<H; y+=step) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+      ctx.strokeStyle = "#cfe0ff";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+
+      // boss hp bar
+      if (screen === "PLAY" && mode === "BOSS" && boss) {
+        const pad = 16;
+        const bw = W - pad*2;
+        const bh = 10;
+        const x = pad;
+        const y = 14;
+        const t = clamp(boss.hp / boss.hpMax, 0, 1);
+
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        roundRect(x, y, bw, bh, 8);
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        roundRect(x, y, bw, bh, 8);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(255, 120, 200, 0.65)";
+        roundRect(x, y, bw * t, bh, 8);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // obstacles
+      for (const o of obstacles) {
+        ctx.save();
+        if (style.shadow) {
+          ctx.shadowColor = "rgba(0,0,0,0.35)";
+          ctx.shadowBlur = 12;
+        }
+        ctx.fillStyle = (o.kind === "BULLET") ? "rgba(255,255,255,0.75)" : style.blockFill;
+
+        const rr = style.pixel ? 0 : 10;
+        roundRect(o.x - o.w/2, o.y - o.h/2, o.w, o.h, rr);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // pickups
+      for (const p of pickups) {
+        ctx.save();
+        if (style.shadow) {
+          ctx.shadowColor = "rgba(0,0,0,0.35)";
+          ctx.shadowBlur = 12;
+        }
+        const fill =
+          p.kind === "INV" ? style.itemInv :
+          p.kind === "SLOW" ? style.itemSlow :
+          style.itemBomb;
+        ctx.fillStyle = fill;
+
+        if (style.pixel) {
+          const size = 18;
+          ctx.fillRect(p.x - size/2, p.y - size/2, size, size);
+        } else {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+          ctx.fill();
+        }
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.font = "900 12px system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+        ctx.textAlign = "center";
+        const icon = p.kind === "INV" ? "🛡" : p.kind === "SLOW" ? "🕒" : "💣";
+        ctx.fillText(icon, p.x, p.y + 4);
+        ctx.restore();
+      }
+
+      // boss body
+      if (screen === "PLAY" && mode === "BOSS" && boss) {
+        ctx.save();
+        if (style.shadow) {
+          ctx.shadowColor = "rgba(0,0,0,0.35)";
+          ctx.shadowBlur = 18;
+        }
+        ctx.fillStyle = style.bossFill;
+        const rr = style.pixel ? 0 : 14;
+        roundRect(boss.x - boss.w/2, boss.y - boss.h/2, boss.w, boss.h, rr);
+        ctx.fill();
+
+        // eyes
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        const ex = boss.w * 0.18;
+        ctx.fillRect(boss.x - ex - 8, boss.y - 5, 10, 10);
+        ctx.fillRect(boss.x + ex - 2, boss.y - 5, 10, 10);
+        ctx.restore();
+      }
+
+      // player
+      ctx.save();
+      if (style.shadow) {
+        ctx.shadowColor = "rgba(0,0,0,0.45)";
+        ctx.shadowBlur = 14;
+      }
+      const invBlink = (player.invT > 0) ? (Math.sin(now()*0.02) > 0 ? 0.55 : 1.0) : 1.0;
+      ctx.globalAlpha = invBlink;
+
+      ctx.fillStyle = player.dash ? style.playerDashFill : style.playerFill;
+      const rr = style.pixel ? 0 : 12;
+      roundRect(player.x - player.w/2, player.y - player.h/2, player.w, player.h, rr);
+      ctx.fill();
+
+      if (player.invT > 0 && !style.pixel) {
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 0.35;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, 28, 0, Math.PI*2);
+        ctx.strokeStyle = "rgba(120,255,200,0.8)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // particles
+      ctx.save();
+      for (const pt of particles) {
+        const a = 1 - (pt.t / pt.life);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, style.pixel ? 2.0 : 2.4, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // overlays
+      if (screen === "HOME") {
+        homeOverlay();
+      } else if (paused) {
+        overlay("일시정지", "P로 계속 / H로 홈");
+      } else if (screen === "OVER") {
+        overlay("Game Over", "R로 재시작 / H로 홈");
+      }
+
+      ctx.restore();
+    }
+
+    function overlay(title, sub) {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.48)";
+      roundRect(160, 190, W-320, 170, 18);
+      ctx.fill();
+
+      ctx.fillStyle = style.text;
+      ctx.textAlign = "center";
+      ctx.font = "900 32px system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+      ctx.fillText(title, W/2, 260);
+
+      ctx.globalAlpha = 0.9;
+      ctx.font = "800 15px system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+      ctx.fillText(sub, W/2, 298);
+      ctx.restore();
+    }
+
+    function homeOverlay() {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      roundRect(140, 140, W-280, 290, 20);
+      ctx.fill();
+
+      ctx.fillStyle = style.text;
+      ctx.textAlign = "center";
+      ctx.font = "900 38px system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+      ctx.fillText("Dodge the Blocks: Stages", W/2, 210);
+
+      ctx.globalAlpha = 0.92;
+      ctx.font = "800 15px system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+      ctx.fillText("Waves를 버티면 Boss가 등장해. 아이템으로 생존력을 올려!", W/2, 242);
+
+      ctx.globalAlpha = 0.96;
+      ctx.font = "900 16px system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+      ctx.fillText("Enter/Space 또는 Start 버튼으로 시작", W/2, 292);
+
+      ctx.globalAlpha = 0.82;
+      ctx.font = "800 13px system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+      ctx.fillText("서버 랭킹은 Guest/Google 로그인 후 Server/Combined 탭에서 확인", W/2, 320);
+      ctx.fillText("Audio는 버튼으로 활성화(브라우저 정책)", W/2, 340);
+
+      ctx.restore();
+    }
+
+    function roundRect(x, y, w, h, r) {
+      const rr = Math.min(r, w/2, h/2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr);
+      ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr);
+      ctx.closePath();
+    }
+
+    // ===== UI wiring =====
+    startBtn.onclick = () => startGame();
+    pauseBtn.onclick = () => togglePause();
+    restartBtn.onclick = () => restartGame();
+    homeBtn.onclick = () => goHome();
+
+    audioBtn.onclick = () => setAudio(!audioOn);
+
+    clearLbBtn.onclick = () => {
+      beep(SFX.click);
+      localStorage.removeItem(LB_KEY);
+      renderLeaderboardView();
+    };
+
+    styleSel.onchange = () => applyStyle(styleSel.value);
+
+    tabLocal.onclick = () => { lbView = "LOCAL"; renderLeaderboardView(); };
+    tabServer.onclick = () => { lbView = "SERVER"; renderLeaderboardView(); refreshServerLeaderboard(); };
+    tabCombined.onclick = () => { lbView = "COMBINED"; renderLeaderboardView(); refreshServerLeaderboard(); };
+    syncBtn.onclick = () => { beep(SFX.click); refreshServerLeaderboard(); };
+
+    // ===== Auth buttons =====
+    guestBtn.onclick = async () => {
+      beep(SFX.click);
+      if (!supabase) return alert("Supabase 설정(SUPABASE_URL/ANON_KEY)을 먼저 채워줘!");
+      const { error } = await supabase.auth.signInAnonymously();
+      if (error) alert(error.message);
+      await refreshAuthUI();
+      await refreshServerLeaderboard();
+    };
+
+    googleBtn.onclick = async () => {
+      beep(SFX.click);
+      if (!supabase) return alert("Supabase 설정(SUPABASE_URL/ANON_KEY)을 먼저 채워줘!");
+      const redirectTo = window.location.href;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo }
+      });
+      if (error) alert(error.message);
+    };
+
+    logoutBtn.onclick = async () => {
+      beep(SFX.click);
+      if (!supabase) return;
+      await supabase.auth.signOut();
+      await refreshAuthUI();
+      serverCache = [];
+      myCache = [];
+      renderLeaderboardView();
+    };
+
+    // ===== Load saved settings =====
+    nameInput.value = localStorage.getItem(NAME_KEY) || "";
+    if (nameInput.value) nameInput.placeholder = nameInput.value;
+    nameInput.addEventListener("change", () => {
+      localStorage.setItem(NAME_KEY, nameInput.value.trim().slice(0,12));
+    });
+
+    bestEl.textContent = best;
+
+    const savedStyle = localStorage.getItem(STYLE_KEY) || "neon";
+    styleSel.value = savedStyle;
+    applyStyle(savedStyle);
+
+    // ===== Init leaderboard view =====
+    renderLeaderboardView();
+
+    // ===== Init auth listener =====
+    (async () => {
+      await refreshAuthUI();
+      if (supabase) {
+        supabase.auth.onAuthStateChange(async () => {
+          await refreshAuthUI();
+          await refreshServerLeaderboard();
+        });
+      }
+    })();
+
+    // ===== Initial draw =====
+    updateHUD();
+    draw();
+
+  })();
+  </script>
+</body>
+</html>
