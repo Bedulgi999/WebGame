@@ -2,98 +2,288 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WebGame - Home</title>
-  <style>
-    :root { color-scheme: dark; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0f19; color:#e9eefc; }
-    .wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
-    .card { width:min(560px, 100%); background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:22px; box-shadow:0 12px 40px rgba(0,0,0,0.35); }
-    h1 { margin:0 0 8px; font-size:22px; }
-    p { margin:0 0 14px; opacity:.85; line-height:1.5; }
-    .row { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
-    button {
-      flex:1; min-width:170px;
-      border:1px solid rgba(255,255,255,0.16);
-      background:rgba(255,255,255,0.08);
-      color:#e9eefc;
-      padding:12px 14px;
-      border-radius:12px;
-      cursor:pointer;
-      font-weight:800;
-    }
-    button:hover { background:rgba(255,255,255,0.12); }
-    .msg { margin-top:14px; font-size:13px; white-space:pre-wrap; opacity:.9; }
-    .err { color:#ff8a8a; }
-    .ok  { color:#8dffb3; }
-    code { background:rgba(255,255,255,0.08); padding:2px 6px; border-radius:8px; }
-  </style>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Web Arcade</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:," />
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Web Game</h1>
-      <p>게스트(익명) 또는 Google로 로그인하고 게임을 시작해요.</p>
-
-      <div class="row">
-        <button id="guestBtn" type="button">게스트로 시작</button>
-        <button id="googleBtn" type="button">Google로 로그인</button>
+      <div class="hrow">
+        <div>
+          <h1>Web Arcade</h1>
+          <p>여러 미니게임을 이기면 점수 +, 죽으면 점수 - . 누적 점수로 랭킹 경쟁!</p>
+        </div>
+        <div class="badge" id="authBadge">로그인 상태 확인 중…</div>
       </div>
 
-      <div class="msg" id="msg"></div>
-      <div class="msg" style="opacity:.75; margin-top:8px;">
-        로그인 성공 시 <code>/game.html</code>로 이동
+      <div class="grid">
+        <div class="panel">
+          <h2>로그인</h2>
+          <div class="small">게스트/Google 로그인 후 게임을 선택하세요.</div>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+            <button class="btn" id="guestBtn">게스트</button>
+            <button class="btn primary" id="googleBtn">Google</button>
+            <button class="btn danger" id="logoutBtn">로그아웃</button>
+          </div>
+
+          <div class="msg" id="msg"></div>
+
+          <hr style="border:0; border-top:1px solid rgba(255,255,255,0.10); margin:14px 0;">
+
+          <h2>게임 선택</h2>
+          <div class="small">각 게임의 결과가 누적 점수에 반영됩니다.</div>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+            <button class="btn" data-game="dodge">Dodge (10초 생존하면 승리)</button>
+            <button class="btn" data-game="clicker">Clicker (제한시간 내 목표 달성)</button>
+            <button class="btn" data-game="aim">Aim (타겟 맞히기)</button>
+          </div>
+
+          <div class="small" style="margin-top:10px;">
+            • 승리: <b>+50</b> / 패배: <b>-20</b><br/>
+            • 게임 시작 시 <code>/game.html?g=...</code> 로 이동
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="hrow">
+            <h2>스코어 보드</h2>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <input id="nameInput" placeholder="닉네임(제출용)" maxlength="12" />
+              <button class="btn" id="syncBtn">Sync</button>
+              <button class="btn primary" id="submitBtn">제출</button>
+            </div>
+          </div>
+
+          <div class="small">
+            서버 Top10 + 내 로컬 누적 점수 표시. (1/2/3등은 색 강조)
+          </div>
+
+          <div class="msg" id="rankMsg"></div>
+          <div id="board" style="margin-top:10px;"></div>
+        </div>
       </div>
     </div>
   </div>
 
   <script type="module">
-    // ✅ ESM 방식으로 Supabase 불러오기 (CDN 스크립트가 막혀도 동작)
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
     // =========================
-    // ✅ 너의 값 넣기
+    // ✅ 너 값으로 바꿔
     // =========================
     const SUPABASE_URL = "https://jwkjsmlicirmuujsmdfi.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_YfPtLavytOMWG5gHr7pEDg_Dy3j8Wld";
-    const GAME_URL = "/game.html";
-
-    const msgEl = document.getElementById("msg");
-    const guestBtn = document.getElementById("guestBtn");
-    const googleBtn = document.getElementById("googleBtn");
-
-    function setMsg(text, ok=false) {
-      msgEl.className = "msg " + (ok ? "ok" : "err");
-      msgEl.textContent = text || "";
-    }
-
-    console.log("[HOME] script loaded"); // ✅ 이게 콘솔에 찍혀야 함
+    const SUPABASE_ANON_KEY = "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";
+    const FUNCTION_URL = "https://jwkjsmlicirmuujsmdfi.supabase.co/functions/v1/leaderboard";
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 이미 로그인 상태면 바로 게임
-    const { data: sess } = await supabase.auth.getSession();
-    if (sess?.session) location.href = GAME_URL;
+    const authBadge = document.getElementById("authBadge");
+    const msgEl = document.getElementById("msg");
+    const rankMsg = document.getElementById("rankMsg");
+    const boardEl = document.getElementById("board");
+    const nameInput = document.getElementById("nameInput");
 
-    guestBtn.addEventListener("click", async () => {
-      console.log("[HOME] guest click");
-      setMsg("");
-      const { error } = await supabase.auth.signInAnonymously();
-      if (error) return setMsg("게스트 로그인 실패:\n" + error.message);
-      setMsg("게스트 로그인 성공! 이동합니다.", true);
-      location.href = GAME_URL;
+    const LS_TOTAL = "arcade_total_score_v1";      // 누적 점수(로컬)
+    const LS_LOCALNAME = "arcade_name_v1";
+
+    // 점수 규칙
+    const WIN_POINTS = 50;
+    const LOSE_POINTS = -20;
+
+    function getTotalScore() {
+      return Number(localStorage.getItem(LS_TOTAL) || "0") || 0;
+    }
+    function setTotalScore(v) {
+      localStorage.setItem(LS_TOTAL, String(Math.trunc(v)));
+    }
+
+    function setMsg(el, text, ok=false) {
+      el.className = "msg " + (ok ? "ok" : "err");
+      el.textContent = text || "";
+    }
+
+    // 닉네임 로컬 저장
+    const savedName = localStorage.getItem(LS_LOCALNAME);
+    if (savedName) nameInput.value = savedName;
+
+    nameInput.addEventListener("input", () => {
+      localStorage.setItem(LS_LOCALNAME, (nameInput.value || "").trim().slice(0,12));
     });
 
-    googleBtn.addEventListener("click", async () => {
-      console.log("[HOME] google click");
-      setMsg("");
-      const redirectTo = `${location.origin}${GAME_URL}`; // ✅ 무조건 game.html로 돌아오게
+    // ---- Auth status ----
+    async function refreshAuthBadge() {
+      const { data } = await supabase.auth.getSession();
+      const s = data?.session;
+      if (!s) {
+        authBadge.textContent = "로그인 안 됨";
+        return null;
+      }
+      authBadge.textContent = `로그인됨 (${s.user.app_metadata?.provider || "anonymous"})`;
+      return s;
+    }
+
+    // ---- Login actions ----
+    document.getElementById("guestBtn").onclick = async () => {
+      setMsg(msgEl, "");
+      const { error } = await supabase.auth.signInAnonymously();
+      if (error) return setMsg(msgEl, "게스트 로그인 실패:\n" + error.message);
+      await refreshAuthBadge();
+      setMsg(msgEl, "게스트 로그인 성공!", true);
+    };
+
+    document.getElementById("googleBtn").onclick = async () => {
+      setMsg(msgEl, "");
+      const redirectTo = `${location.origin}/index.html`; // 로그인 끝나면 허브로 복귀
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo }
       });
-      if (error) setMsg("Google 로그인 시작 실패:\n" + error.message);
+      if (error) setMsg(msgEl, "Google 로그인 시작 실패:\n" + error.message);
+    };
+
+    document.getElementById("logoutBtn").onclick = async () => {
+      await supabase.auth.signOut();
+      await refreshAuthBadge();
+      setMsg(msgEl, "로그아웃됨", true);
+    };
+
+    // ---- Enter games ----
+    document.querySelectorAll("[data-game]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const s = await refreshAuthBadge();
+        if (!s) return setMsg(msgEl, "먼저 로그인해줘.", false);
+        const g = btn.getAttribute("data-game");
+        location.href = `/game.html?g=${encodeURIComponent(g)}`;
+      });
     });
+
+    // ---- Scoreboard (server + local) ----
+    let serverTop = [];
+
+    async function callFn(body) {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) throw new Error("No auth session");
+      const res = await fetch(FUNCTION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+        body: JSON.stringify(body)
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j.ok === false) throw new Error(j.error || j.message || ("HTTP " + res.status));
+      return j;
+    }
+
+    function esc(s){ return String(s).replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m])); }
+
+    function renderBoard() {
+      const localTotal = getTotalScore();
+      const localName = (nameInput.value || "").trim().slice(0,12) || "Player";
+
+      const rows = (serverTop || []).map((r, i) => ({
+        rank: i+1,
+        name: r.name,
+        score: r.score,
+        stage: r.stage ?? "-",
+        time: r.created_at ? new Date(r.created_at).toLocaleString() : ""
+      }));
+
+      const myRow = {
+        rank: "ME",
+        name: localName + " (local)",
+        score: localTotal,
+        stage: "-",
+        time: "-"
+      };
+
+      const html = `
+        <table>
+          <thead><tr><th>Rank</th><th>Name</th><th>Total</th><th>Info</th><th>Time</th></tr></thead>
+          <tbody>
+            ${rows.map(r => {
+              const cls = r.rank===1 ? "top1" : r.rank===2 ? "top2" : r.rank===3 ? "top3" : "";
+              return `<tr class="${cls}">
+                <td><span class="rankpill">#${r.rank}</span></td>
+                <td>${esc(r.name)}</td>
+                <td>${r.score}</td>
+                <td>${esc(String(r.stage))}</td>
+                <td>${esc(r.time)}</td>
+              </tr>`;
+            }).join("")}
+            <tr><td colspan="5" style="opacity:.55;">— 내 로컬 누적 점수 —</td></tr>
+            <tr>
+              <td><span class="rankpill">ME</span></td>
+              <td>${esc(myRow.name)}</td>
+              <td>${myRow.score}</td>
+              <td>${myRow.stage}</td>
+              <td>${myRow.time}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="small">
+          승리 +${WIN_POINTS} / 패배 ${LOSE_POINTS} (누적 점수: 로컬 저장)
+        </div>
+      `;
+      boardEl.innerHTML = html;
+    }
+
+    async function syncServer() {
+      setMsg(rankMsg, "서버 Top10 불러오는 중...");
+      try {
+        const j = await callFn({ action: "top", limit: 10 });
+        serverTop = j.data || [];
+        setMsg(rankMsg, "서버 랭킹 업데이트 완료", true);
+        renderBoard();
+      } catch (e) {
+        setMsg(rankMsg, "Sync 실패: " + (e?.message || e), false);
+      }
+    }
+
+    async function submitTotal() {
+      setMsg(rankMsg, "서버에 제출 중...");
+      try {
+        const s = await refreshAuthBadge();
+        if (!s) return setMsg(rankMsg, "먼저 로그인해줘.", false);
+
+        const name = (nameInput.value || "").trim().slice(0,12) || "Player";
+        const total = getTotalScore();
+
+        // stage 필드는 여기서는 "누적 점수 시스템"이라서 info용으로 0 넣음
+        await callFn({ action: "submit", name, score: total, stage: 0 });
+
+        setMsg(rankMsg, "제출 성공! 서버 랭킹 갱신 중...", true);
+        await syncServer();
+      } catch (e) {
+        setMsg(rankMsg, "제출 실패: " + (e?.message || e), false);
+      }
+    }
+
+    document.getElementById("syncBtn").onclick = syncServer;
+    document.getElementById("submitBtn").onclick = submitTotal;
+
+    // ---- Receive game result ----
+    // game.html이 끝나면 index.html로 돌아오면서 ?result=win|lose 로 전달
+    const qs = new URLSearchParams(location.search);
+    const result = qs.get("result"); // win / lose
+    if (result === "win" || result === "lose") {
+      const before = getTotalScore();
+      const delta = result === "win" ? WIN_POINTS : LOSE_POINTS;
+      setTotalScore(before + delta);
+      setMsg(msgEl, `게임 결과: ${result.toUpperCase()} (${delta>0?"+":""}${delta})\n누적 점수: ${getTotalScore()}`, true);
+
+      // URL 정리
+      qs.delete("result");
+      const newUrl = location.pathname + (qs.toString() ? "?" + qs.toString() : "");
+      history.replaceState({}, "", newUrl);
+    }
+
+    // init
+    await refreshAuthBadge();
+    renderBoard();
   </script>
 </body>
 </html>
