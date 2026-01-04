@@ -24,23 +24,18 @@
       <div class="grid">
         <div class="panel">
           <h2>플레이</h2>
-          <div class="gamebox">
-            <canvas id="c"></canvas>
-          </div>
+          <div class="gamebox"><canvas id="c"></canvas></div>
           <div class="msg" id="msg"></div>
           <div class="small" id="hud"></div>
+          <div class="small" id="extra"></div>
         </div>
 
         <div class="panel">
-          <h2>규칙</h2>
+          <h2>도움말</h2>
+          <div class="small" id="help"></div>
+          <hr style="border:0;border-top:1px solid rgba(255,255,255,0.10); margin:12px 0;">
           <div class="small">
-            • 승리하면 허브로 돌아가며 <b>?result=win</b> 전달<br/>
-            • 죽으면 허브로 돌아가며 <b>?result=lose</b> 전달<br/>
-            • 허브가 누적 점수를 업데이트함
-          </div>
-          <hr style="border:0; border-top:1px solid rgba(255,255,255,0.10); margin:12px 0;">
-          <div class="small">
-            팁: 이 페이지는 “게임만 담당”. 점수/랭킹은 index.html에서 관리합니다.
+            종료 시 결과가 허브로 전달되어 누적 Score/Coins가 갱신됩니다.
           </div>
         </div>
       </div>
@@ -50,8 +45,7 @@
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-    // ✅ 같은 프로젝트 값 (세션 체크용)
-    const SUPABASE_URL = "https://jwkjsmlicirmuujsmdfi.supabase.co";
+    const SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_YfPtLavytOMWG5gHr7pEDg_Dy3j8Wld";
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -59,246 +53,598 @@
     const descEl = document.getElementById("desc");
     const msgEl = document.getElementById("msg");
     const hudEl = document.getElementById("hud");
+    const extraEl = document.getElementById("extra");
+    const helpEl = document.getElementById("help");
     const canvas = document.getElementById("c");
     const ctx = canvas.getContext("2d");
-
-    function setMsg(text, ok=false) {
-      msgEl.className = "msg " + (ok ? "ok" : "err");
-      msgEl.textContent = text || "";
-    }
-
-    // 로그인 체크 (허브에서만 시작하게)
-    const { data } = await supabase.auth.getSession();
-    if (!data?.session) location.href = "/index.html";
-
-    const qs = new URLSearchParams(location.search);
-    const g = qs.get("g") || "dodge";
 
     document.getElementById("backBtn").onclick = () => location.href = "/index.html";
     document.getElementById("restartBtn").onclick = () => start();
 
-    // Canvas sizing (CSS px 기반)
-    function resize() {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-      canvas.width = Math.floor(rect.width * dpr);
-      canvas.height = Math.floor(rect.height * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    addEventListener("resize", resize);
-
-    // Common helpers
+    function setMsg(t, ok=false){ msgEl.className="msg "+(ok?"ok":"err"); msgEl.textContent=t||""; }
     function rand(a,b){ return a + Math.random()*(b-a); }
     function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
     function dist(x1,y1,x2,y2){ return Math.hypot(x1-x2, y1-y2); }
 
-    let state = null;
-    let raf = 0;
-    let last = 0;
+    // 로그인 체크
+    const { data } = await supabase.auth.getSession();
+    if(!data?.session) location.href = "/index.html";
 
-    function end(result) {
+    // 로컬 coins 확인 (슬롯 배팅용)
+    const LS_COINS = "arcade_total_coins_v2";
+    function getCoins(){ return Number(localStorage.getItem(LS_COINS)||"200")||200; }
+
+    const qs = new URLSearchParams(location.search);
+    const g = qs.get("g") || "dodge";
+
+    // 게임별 기본 보상(슬롯은 배팅 기반이라 별도)
+    const RULES = {
+      dodge:  { winS: 40, loseS: -15, winC: 10, loseC: -5 },
+      clicker:{ winS: 30, loseS: -10, winC: 5,  loseC: -3 },
+      aim:    { winS: 35, loseS: -12, winC: 8,  loseC: -4 },
+      rhythm: { winS: 55, loseS: -20, winC: 12, loseC: -6 },
+      puzzle: { winS: 60, loseS: -25, winC: 15, loseC: -8 },
+      tetris: { winS: 70, loseS: -30, winC: 18, loseC: -10 },
+      slot:   { winS: 10, loseS: -5,  winC: 0,  loseC: 0 },
+    };
+
+    function end(result, ds, dc){
       cancelAnimationFrame(raf);
-      setMsg(result === "win" ? "WIN! 허브로 돌아갑니다." : "LOSE! 허브로 돌아갑니다.", result==="win");
-      setTimeout(() => {
-        location.href = `/index.html?result=${encodeURIComponent(result)}`;
+      setMsg(result==="win" ? "WIN! 허브로 돌아갑니다." : "LOSE! 허브로 돌아갑니다.", result==="win");
+      setTimeout(()=>{
+        location.href = `/index.html?result=${result}&g=${encodeURIComponent(g)}&ds=${encodeURIComponent(ds)}&dc=${encodeURIComponent(dc)}`;
       }, 650);
     }
 
-    // =============================
-    // Game 1: Dodge (10초 생존)
-    // =============================
-    function gameDodgeInit(w,h) {
-      titleEl.textContent = "Dodge";
-      descEl.textContent = "10초 동안 장애물을 피하면 승리. (WASD/방향키 이동)";
-      return {
-        t: 0,
-        duration: 10,
-        player: { x: w*0.5, y: h*0.78, r: 14 },
-        balls: []
-      };
+    // Canvas sizing
+    function resize(){
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
     }
+    addEventListener("resize", resize);
 
-    function gameDodgeStep(s, dt, w, h, keys) {
-      s.t += dt;
-      const p = s.player;
-      const spd = 260;
-
-      const dx = (keys.left?-1:0) + (keys.right?1:0);
-      const dy = (keys.up?-1:0) + (keys.down?1:0);
-      p.x = clamp(p.x + dx*spd*dt, p.r, w - p.r);
-      p.y = clamp(p.y + dy*spd*dt, p.r, h - p.r);
-
-      // spawn
-      if (Math.random() < 2.2 * dt) {
-        s.balls.push({ x: rand(20, w-20), y: -20, r: rand(10, 18), vy: rand(140, 260) });
-      }
-
-      // update
-      for (const b of s.balls) b.y += b.vy * dt;
-      s.balls = s.balls.filter(b => b.y < h + 30);
-
-      // collision
-      for (const b of s.balls) {
-        if (dist(b.x,b.y,p.x,p.y) < b.r + p.r) return "lose";
-      }
-      if (s.t >= s.duration) return "win";
-      return null;
-    }
-
-    function gameDodgeDraw(s, w, h) {
-      // bg
-      ctx.fillStyle = "#091022";
-      ctx.fillRect(0,0,w,h);
-
-      // player
-      ctx.fillStyle = "rgba(120,200,255,0.95)";
-      ctx.beginPath(); ctx.arc(s.player.x, s.player.y, s.player.r, 0, Math.PI*2); ctx.fill();
-
-      // balls
-      ctx.fillStyle = "rgba(255,120,180,0.92)";
-      for (const b of s.balls) { ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }
-
-      hudEl.textContent = `남은 시간: ${(s.duration - s.t).toFixed(1)}s`;
-    }
-
-    // =============================
-    // Game 2: Clicker (8초 25클릭)
-    // =============================
-    function gameClickerInit(w,h) {
-      titleEl.textContent = "Clicker";
-      descEl.textContent = "8초 안에 25번 클릭하면 승리. (캔버스를 클릭!)";
-      return { t:0, duration: 8, goal: 25, clicks: 0 };
-    }
-
-    function gameClickerStep(s, dt) {
-      s.t += dt;
-      if (s.clicks >= s.goal) return "win";
-      if (s.t >= s.duration) return "lose";
-      return null;
-    }
-
-    function gameClickerDraw(s, w, h) {
-      ctx.fillStyle = "#0a1126";
-      ctx.fillRect(0,0,w,h);
-
-      const progress = clamp(s.clicks / s.goal, 0, 1);
-      ctx.fillStyle = "rgba(120,200,255,0.22)";
-      ctx.fillRect(30, h*0.55, (w-60)*progress, 18);
-
-      ctx.strokeStyle = "rgba(255,255,255,0.18)";
-      ctx.strokeRect(30, h*0.55, w-60, 18);
-
-      ctx.fillStyle = "rgba(233,238,252,0.95)";
-      ctx.font = "20px system-ui";
-      ctx.fillText(`Clicks: ${s.clicks}/${s.goal}`, 30, h*0.45);
-
-      hudEl.textContent = `남은 시간: ${(s.duration - s.t).toFixed(1)}s (클릭해서 채우기!)`;
-    }
-
-    // =============================
-    // Game 3: Aim (10초 8타겟)
-    // =============================
-    function gameAimInit(w,h) {
-      titleEl.textContent = "Aim";
-      descEl.textContent = "10초 안에 8개 타겟을 맞히면 승리. (타겟을 클릭!)";
-      return { t:0, duration: 10, goal: 8, hits:0, target: spawnTarget(w,h) };
-    }
-
-    function spawnTarget(w,h){
-      return { x: rand(60, w-60), y: rand(70, h-70), r: rand(18, 28) };
-    }
-
-    function gameAimStep(s, dt, w, h) {
-      s.t += dt;
-      if (s.hits >= s.goal) return "win";
-      if (s.t >= s.duration) return "lose";
-      // 타겟은 정지, 클릭으로만 바뀜
-      return null;
-    }
-
-    function gameAimDraw(s, w, h) {
-      ctx.fillStyle = "#091022";
-      ctx.fillRect(0,0,w,h);
-
-      // target
-      ctx.fillStyle = "rgba(255,230,80,0.22)";
-      ctx.beginPath(); ctx.arc(s.target.x, s.target.y, s.target.r+10, 0, Math.PI*2); ctx.fill();
-
-      ctx.fillStyle = "rgba(255,230,80,0.55)";
-      ctx.beginPath(); ctx.arc(s.target.x, s.target.y, s.target.r, 0, Math.PI*2); ctx.fill();
-
-      ctx.fillStyle = "rgba(233,238,252,0.95)";
-      ctx.font = "20px system-ui";
-      ctx.fillText(`Hits: ${s.hits}/${s.goal}`, 30, 40);
-
-      hudEl.textContent = `남은 시간: ${(s.duration - s.t).toFixed(1)}s`;
-    }
-
-    // ---- Input ----
-    const key = { left:false,right:false,up:false,down:false };
-    addEventListener("keydown", (e) => {
+    // Input
+    const key = { left:false,right:false,up:false,down:false, space:false };
+    addEventListener("keydown", (e)=>{
       if (e.code==="ArrowLeft"||e.code==="KeyA") key.left=true;
       if (e.code==="ArrowRight"||e.code==="KeyD") key.right=true;
       if (e.code==="ArrowUp"||e.code==="KeyW") key.up=true;
       if (e.code==="ArrowDown"||e.code==="KeyS") key.down=true;
+      if (e.code==="Space") key.space=true;
     });
-    addEventListener("keyup", (e) => {
+    addEventListener("keyup", (e)=>{
       if (e.code==="ArrowLeft"||e.code==="KeyA") key.left=false;
       if (e.code==="ArrowRight"||e.code==="KeyD") key.right=false;
       if (e.code==="ArrowUp"||e.code==="KeyW") key.up=false;
       if (e.code==="ArrowDown"||e.code==="KeyS") key.down=false;
+      if (e.code==="Space") key.space=false;
     });
 
-    canvas.addEventListener("click", (ev) => {
-      if (!state) return;
+    // Click input (clicker/aim/puzzle/slot)
+    let lastClick = { x:0, y:0, hit:false };
+    canvas.addEventListener("click", (ev)=>{
       const rect = canvas.getBoundingClientRect();
-      const x = (ev.clientX - rect.left);
-      const y = (ev.clientY - rect.top);
-
-      if (g === "clicker") {
-        state.clicks++;
-      } else if (g === "aim") {
-        if (dist(x,y,state.target.x,state.target.y) <= state.target.r) {
-          state.hits++;
-          state.target = spawnTarget(rect.width, rect.height);
-        }
-      }
+      lastClick = { x: ev.clientX - rect.left, y: ev.clientY - rect.top, hit:true };
     });
 
-    function start() {
-      cancelAnimationFrame(raf);
-      resize();
+    // Loop
+    let state = null;
+    let raf = 0;
+    let last = 0;
 
-      const w = canvas.getBoundingClientRect().width;
-      const h = canvas.getBoundingClientRect().height;
-
-      if (g === "dodge") state = gameDodgeInit(w,h);
-      else if (g === "clicker") state = gameClickerInit(w,h);
-      else state = gameAimInit(w,h);
-
-      setMsg("게임 시작!", true);
-      last = performance.now();
-      loop(last);
-    }
-
-    function loop(now) {
-      const dt = Math.min(0.033, (now - last)/1000);
+    function loop(now){
+      const dt = Math.min(0.033, (now-last)/1000);
       last = now;
-
       const rect = canvas.getBoundingClientRect();
       const w = rect.width, h = rect.height;
 
-      let result = null;
-      if (g === "dodge") result = gameDodgeStep(state, dt, w, h, key);
-      else if (g === "clicker") result = gameClickerStep(state, dt, w, h);
-      else result = gameAimStep(state, dt, w, h);
+      const result = state.step(dt, w, h);
+      state.draw(w, h);
 
-      if (g === "dodge") gameDodgeDraw(state, w, h);
-      else if (g === "clicker") gameClickerDraw(state, w, h);
-      else gameAimDraw(state, w, h);
+      if(result){
+        // 결과 보상 계산
+        let ds=0, dc=0;
+        if(g === "slot"){
+          // 슬롯은 state에서 직접 계산
+          ds = result.ds;
+          dc = result.dc;
+          return end(result.result, ds, dc);
+        }else{
+          const r = RULES[g] || RULES.dodge;
+          ds = (result === "win") ? r.winS : r.loseS;
+          dc = (result === "win") ? r.winC : r.loseC;
+          return end(result, ds, dc);
+        }
+      }
 
-      if (result) return end(result);
       raf = requestAnimationFrame(loop);
+    }
+
+    // ====== Games ======
+
+    // 1) Dodge
+    function makeDodge(){
+      titleEl.textContent = "Dodge";
+      descEl.textContent = "10초 생존하면 WIN. WASD/방향키 이동.";
+      helpEl.innerHTML = "장애물을 피하면서 10초 버티세요.";
+      return {
+        t:0, duration:10,
+        p:{ x:0, y:0, r:14 },
+        balls:[],
+        step(dt,w,h){
+          this.t += dt;
+          const p=this.p;
+          if(this.t===dt){ p.x=w*0.5; p.y=h*0.78; }
+          const spd=260;
+          const dx=(key.left?-1:0)+(key.right?1:0);
+          const dy=(key.up?-1:0)+(key.down?1:0);
+          p.x = clamp(p.x+dx*spd*dt, p.r, w-p.r);
+          p.y = clamp(p.y+dy*spd*dt, p.r, h-p.r);
+
+          if(Math.random()<2.2*dt) this.balls.push({ x:rand(20,w-20), y:-20, r:rand(10,18), vy:rand(140,260) });
+          for(const b of this.balls) b.y += b.vy*dt;
+          this.balls = this.balls.filter(b=> b.y < h+30);
+          for(const b of this.balls) if(dist(b.x,b.y,p.x,p.y) < b.r+p.r) return "lose";
+          if(this.t>=this.duration) return "win";
+          hudEl.textContent = `남은 시간 ${(this.duration-this.t).toFixed(1)}s`;
+          extraEl.textContent = "";
+          return null;
+        },
+        draw(w,h){
+          ctx.fillStyle="#091022"; ctx.fillRect(0,0,w,h);
+          ctx.fillStyle="rgba(120,200,255,0.95)";
+          ctx.beginPath(); ctx.arc(this.p.x,this.p.y,this.p.r,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle="rgba(255,120,180,0.92)";
+          for(const b of this.balls){ ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }
+        }
+      };
+    }
+
+    // 2) Clicker
+    function makeClicker(){
+      titleEl.textContent="Clicker";
+      descEl.textContent="8초 안에 25번 클릭하면 WIN.";
+      helpEl.innerHTML="캔버스를 빠르게 클릭하세요.";
+      return {
+        t:0, duration:8, goal:25, clicks:0,
+        step(dt,w,h){
+          this.t += dt;
+          if(lastClick.hit){ this.clicks++; lastClick.hit=false; }
+          hudEl.textContent = `Clicks ${this.clicks}/${this.goal} · 남은 ${(this.duration-this.t).toFixed(1)}s`;
+          extraEl.textContent = "";
+          if(this.clicks>=this.goal) return "win";
+          if(this.t>=this.duration) return "lose";
+          return null;
+        },
+        draw(w,h){
+          ctx.fillStyle="#0a1126"; ctx.fillRect(0,0,w,h);
+          const p = clamp(this.clicks/this.goal,0,1);
+          ctx.fillStyle="rgba(120,200,255,0.22)"; ctx.fillRect(30,h*0.55,(w-60)*p,18);
+          ctx.strokeStyle="rgba(255,255,255,0.18)"; ctx.strokeRect(30,h*0.55,w-60,18);
+          ctx.fillStyle="rgba(233,238,252,0.95)"; ctx.font="20px system-ui";
+          ctx.fillText(`Clicks: ${this.clicks}/${this.goal}`, 30, h*0.45);
+        }
+      };
+    }
+
+    // 3) Aim
+    function makeAim(){
+      titleEl.textContent="Aim";
+      descEl.textContent="10초 안에 8개 타겟 클릭하면 WIN.";
+      helpEl.innerHTML="노란 타겟을 클릭하세요.";
+      return {
+        t:0, duration:10, goal:8, hits:0, target:null,
+        spawn(w,h){ this.target = { x:rand(60,w-60), y:rand(70,h-70), r:rand(18,28) }; },
+        step(dt,w,h){
+          if(!this.target) this.spawn(w,h);
+          this.t += dt;
+          if(lastClick.hit){
+            const {x,y} = lastClick; lastClick.hit=false;
+            if(dist(x,y,this.target.x,this.target.y) <= this.target.r){
+              this.hits++;
+              this.spawn(w,h);
+            }
+          }
+          hudEl.textContent = `Hits ${this.hits}/${this.goal} · 남은 ${(this.duration-this.t).toFixed(1)}s`;
+          extraEl.textContent = "";
+          if(this.hits>=this.goal) return "win";
+          if(this.t>=this.duration) return "lose";
+          return null;
+        },
+        draw(w,h){
+          ctx.fillStyle="#091022"; ctx.fillRect(0,0,w,h);
+          ctx.fillStyle="rgba(255,230,80,0.22)";
+          ctx.beginPath(); ctx.arc(this.target.x,this.target.y,this.target.r+10,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle="rgba(255,230,80,0.55)";
+          ctx.beginPath(); ctx.arc(this.target.x,this.target.y,this.target.r,0,Math.PI*2); ctx.fill();
+        }
+      };
+    }
+
+    // 4) Rhythm (Space 타이밍)
+    function makeRhythm(){
+      titleEl.textContent="Rhythm";
+      descEl.textContent="바가 중앙에 올 때 Space! 6번 성공하면 WIN. 실수 3번이면 LOSE.";
+      helpEl.innerHTML="세로 바가 중앙 영역에 들어오면 Space를 누르세요.";
+      return {
+        t:0, duration:18,
+        hits:0, miss:0,
+        x:0, vx: 420,
+        cooldown:0,
+        step(dt,w,h){
+          this.t += dt;
+          this.cooldown = Math.max(0, this.cooldown - dt);
+          this.x += this.vx*dt;
+          if(this.x < 30){ this.x=30; this.vx=Math.abs(this.vx); }
+          if(this.x > w-30){ this.x=w-30; this.vx=-Math.abs(this.vx); }
+
+          const center = w*0.5;
+          const okZone = Math.abs(this.x-center) < 35;
+
+          if(key.space && this.cooldown<=0){
+            this.cooldown = 0.25;
+            if(okZone) this.hits++; else this.miss++;
+          }
+
+          hudEl.textContent = `Hits ${this.hits}/6 · Miss ${this.miss}/3 · 남은 ${(this.duration-this.t).toFixed(1)}s`;
+          extraEl.textContent = "Space로 판정";
+          if(this.hits>=6) return "win";
+          if(this.miss>=3 || this.t>=this.duration) return "lose";
+          return null;
+        },
+        draw(w,h){
+          ctx.fillStyle="#0a1022"; ctx.fillRect(0,0,w,h);
+          // zone
+          ctx.fillStyle="rgba(110,255,170,0.10)";
+          ctx.fillRect(w*0.5-35, 80, 70, h-160);
+          // moving bar
+          ctx.fillStyle="rgba(255,230,80,0.7)";
+          ctx.fillRect(this.x-6, 90, 12, h-180);
+          // guide center line
+          ctx.fillStyle="rgba(255,255,255,0.12)";
+          ctx.fillRect(w*0.5-1, 70, 2, h-140);
+        }
+      };
+    }
+
+    // 5) Puzzle (4x4 슬라이딩)
+    function makePuzzle(){
+      titleEl.textContent="Puzzle";
+      descEl.textContent="4x4 슬라이딩 퍼즐을 제한시간 안에 맞추면 WIN.";
+      helpEl.innerHTML="빈칸 옆 타일을 클릭하면 이동합니다.";
+      const N=4;
+      function isSolved(arr){
+        for(let i=0;i<N*N-1;i++) if(arr[i]!==i+1) return false;
+        return arr[N*N-1]===0;
+      }
+      function shuffle(arr){
+        // 간단 셔플 (완전 풀이가능성은 100% 보장 X지만 데모로 충분)
+        for(let i=arr.length-1;i>0;i--){
+          const j=Math.floor(Math.random()*(i+1));
+          [arr[i],arr[j]]=[arr[j],arr[i]];
+        }
+      }
+      return {
+        t:0, duration:55,
+        tiles: [],
+        step(dt,w,h){
+          this.t += dt;
+          if(this.tiles.length===0){
+            this.tiles = Array.from({length:N*N}, (_,i)=> (i===N*N-1?0:i+1));
+            shuffle(this.tiles);
+          }
+          if(lastClick.hit){
+            const {x,y} = lastClick; lastClick.hit=false;
+            const size = Math.min(w,h) * 0.78;
+            const ox = (w-size)/2, oy=(h-size)/2;
+            const cell = size/N;
+            const cx = Math.floor((x-ox)/cell);
+            const cy = Math.floor((y-oy)/cell);
+            if(cx>=0 && cx<N && cy>=0 && cy<N){
+              const idx = cy*N+cx;
+              const z = this.tiles.indexOf(0);
+              const zx = z%N, zy = Math.floor(z/N);
+              const ax = Math.abs(zx-cx), ay=Math.abs(zy-cy);
+              if(ax+ay===1){
+                [this.tiles[idx], this.tiles[z]] = [this.tiles[z], this.tiles[idx]];
+              }
+            }
+          }
+          hudEl.textContent = `남은 ${(this.duration-this.t).toFixed(0)}s`;
+          extraEl.textContent = "";
+          if(isSolved(this.tiles)) return "win";
+          if(this.t>=this.duration) return "lose";
+          return null;
+        },
+        draw(w,h){
+          ctx.fillStyle="#091022"; ctx.fillRect(0,0,w,h);
+          const size = Math.min(w,h) * 0.78;
+          const ox = (w-size)/2, oy=(h-size)/2;
+          const cell = size/N;
+
+          ctx.fillStyle="rgba(255,255,255,0.08)";
+          ctx.fillRect(ox,oy,size,size);
+
+          ctx.font = "20px system-ui";
+          for(let i=0;i<N*N;i++){
+            const v=this.tiles[i];
+            const x=ox+(i%N)*cell, y=oy+Math.floor(i/N)*cell;
+            ctx.strokeStyle="rgba(255,255,255,0.12)";
+            ctx.strokeRect(x,y,cell,cell);
+            if(v===0) continue;
+            ctx.fillStyle="rgba(120,200,255,0.20)";
+            ctx.fillRect(x+6,y+6,cell-12,cell-12);
+            ctx.fillStyle="rgba(233,238,252,0.95)";
+            ctx.fillText(String(v), x+cell/2-6, y+cell/2+7);
+          }
+        }
+      };
+    }
+
+    // 6) Mini Tetris (10x20, 라인 3개 지우면 WIN, 바닥 닿으면 lose에 가까움)
+    function makeTetris(){
+      titleEl.textContent="Tetris (Mini)";
+      descEl.textContent="라인 3개 지우면 WIN. (←→ 이동, ↓ 빠르게, Space 회전)";
+      helpEl.innerHTML="간단 테트리스. 라인 3개 클리어하면 승리.";
+      const W=10, H=20;
+      const shapes = [
+        // I, O, T, L, J, S, Z (간단)
+        [[1,1,1,1]],
+        [[1,1],[1,1]],
+        [[0,1,0],[1,1,1]],
+        [[1,0,0],[1,1,1]],
+        [[0,0,1],[1,1,1]],
+        [[0,1,1],[1,1,0]],
+        [[1,1,0],[0,1,1]],
+      ];
+      function rot(m){
+        const r=m.length, c=m[0].length;
+        const out=Array.from({length:c},()=>Array(r).fill(0));
+        for(let y=0;y<r;y++) for(let x=0;x<c;x++) out[x][r-1-y]=m[y][x];
+        return out;
+      }
+      function collide(grid, piece, px, py){
+        for(let y=0;y<piece.length;y++){
+          for(let x=0;x<piece[0].length;x++){
+            if(!piece[y][x]) continue;
+            const gx=px+x, gy=py+y;
+            if(gx<0 || gx>=W || gy>=H) return true;
+            if(gy>=0 && grid[gy][gx]) return true;
+          }
+        }
+        return false;
+      }
+      function merge(grid, piece, px, py){
+        for(let y=0;y<piece.length;y++){
+          for(let x=0;x<piece[0].length;x++){
+            if(!piece[y][x]) continue;
+            const gx=px+x, gy=py+y;
+            if(gy>=0) grid[gy][gx]=1;
+          }
+        }
+      }
+      function clearLines(grid){
+        let cleared=0;
+        for(let y=H-1;y>=0;y--){
+          if(grid[y].every(v=>v===1)){
+            grid.splice(y,1);
+            grid.unshift(Array(W).fill(0));
+            cleared++;
+            y++;
+          }
+        }
+        return cleared;
+      }
+      return {
+        t:0, duration:90,
+        grid: Array.from({length:H},()=>Array(W).fill(0)),
+        piece:null, px:3, py:-2,
+        drop:0, speed:0.7,
+        lines:0,
+        canRotate:true,
+        spawn(){
+          this.piece = shapes[Math.floor(Math.random()*shapes.length)].map(row=>row.slice());
+          this.px = Math.floor(W/2)-1;
+          this.py = -2;
+          if(collide(this.grid,this.piece,this.px,this.py)) this.dead=true;
+        },
+        dead:false,
+        step(dt,w,h){
+          this.t += dt;
+          if(!this.piece) this.spawn();
+
+          // input
+          if(key.left){
+            if(!collide(this.grid,this.piece,this.px-1,this.py)) this.px--;
+            key.left=false;
+          }
+          if(key.right){
+            if(!collide(this.grid,this.piece,this.px+1,this.py)) this.px++;
+            key.right=false;
+          }
+          // rotate on space (edge trigger 느낌으로)
+          if(key.space && this.canRotate){
+            this.canRotate=false;
+            const p2 = rot(this.piece);
+            if(!collide(this.grid,p2,this.px,this.py)) this.piece=p2;
+          }
+          if(!key.space) this.canRotate=true;
+
+          const spd = key.down ? 0.08 : this.speed;
+          this.drop += dt;
+          if(this.drop >= spd){
+            this.drop = 0;
+            if(!collide(this.grid,this.piece,this.px,this.py+1)){
+              this.py++;
+            }else{
+              merge(this.grid,this.piece,this.px,this.py);
+              this.lines += clearLines(this.grid);
+              this.piece=null;
+              if(this.lines>=3) return "win";
+            }
+          }
+
+          hudEl.textContent = `Lines ${this.lines}/3 · 남은 ${(this.duration-this.t).toFixed(0)}s`;
+          extraEl.textContent = "←→ 이동, ↓ 드랍, Space 회전";
+          if(this.dead || this.t>=this.duration) return "lose";
+          return null;
+        },
+        draw(w,h){
+          ctx.fillStyle="#07101f"; ctx.fillRect(0,0,w,h);
+          const size = Math.min(w*0.45, h*0.85);
+          const cell = Math.floor(size / H * 1.0); // 시각적으로 맞춤
+          const bw = W*cell, bh = H*cell;
+          const ox = Math.floor((w-bw)/2), oy = Math.floor((h-bh)/2);
+
+          // grid
+          for(let y=0;y<H;y++){
+            for(let x=0;x<W;x++){
+              if(this.grid[y][x]){
+                ctx.fillStyle="rgba(120,200,255,0.25)";
+                ctx.fillRect(ox+x*cell+1, oy+y*cell+1, cell-2, cell-2);
+              }else{
+                ctx.strokeStyle="rgba(255,255,255,0.05)";
+                ctx.strokeRect(ox+x*cell, oy+y*cell, cell, cell);
+              }
+            }
+          }
+
+          // piece
+          if(this.piece){
+            ctx.fillStyle="rgba(255,230,80,0.35)";
+            for(let y=0;y<this.piece.length;y++){
+              for(let x=0;x<this.piece[0].length;x++){
+                if(!this.piece[y][x]) continue;
+                const gx=this.px+x, gy=this.py+y;
+                if(gy<0) continue;
+                ctx.fillRect(ox+gx*cell+1, oy+gy*cell+1, cell-2, cell-2);
+              }
+            }
+          }
+        }
+      };
+    }
+
+    // 7) Slot (배팅)
+    function makeSlot(){
+      titleEl.textContent="Slot (Bet)";
+      descEl.textContent="코인을 배팅해서 늘리세요. (SPIN 버튼/Space)";
+      helpEl.innerHTML="배팅 코인을 설정하고 SPIN! 3개 일치 시 배당이 큽니다.";
+      const symbols = ["🍒","🍋","🔔","7","⭐"];
+      let bet = 10;
+
+      function payout(a,b,c){
+        // 아주 단순한 배당
+        if(a===b && b===c){
+          if(a==="7") return 12;
+          if(a==="⭐") return 8;
+          return 5;
+        }
+        if(a===b || b===c || a===c) return 2;
+        return 0;
+      }
+
+      return {
+        t:0,
+        reels:["?","?","?"],
+        spinning:false,
+        step(dt,w,h){
+          this.t += dt;
+
+          // UI: bet +/- 버튼 영역을 클릭해서 조정
+          if(lastClick.hit){
+            const {x,y} = lastClick; lastClick.hit=false;
+            // 왼쪽 하단 bet- / bet+ / spin 영역 간단 처리
+            if(y > h-110){
+              if(x < w*0.33) bet = Math.max(1, bet-5);
+              else if(x < w*0.66) bet = Math.min(200, bet+5);
+              else {
+                // spin
+                return this.spin(bet);
+              }
+            }
+          }
+
+          // Space로 spin
+          if(key.space){
+            key.space=false;
+            return this.spin(bet);
+          }
+
+          hudEl.textContent = `보유 코인: ${getCoins()} · 배팅: ${bet}`;
+          extraEl.textContent = "하단 버튼 클릭 또는 Space로 SPIN";
+          return null;
+        },
+        spin(betAmount){
+          const coins = getCoins();
+          if(coins < betAmount){
+            setMsg("코인이 부족합니다. 배팅을 줄이세요.", false);
+            return null;
+          }
+          // 결과 굴리기
+          const a = symbols[Math.floor(Math.random()*symbols.length)];
+          const b = symbols[Math.floor(Math.random()*symbols.length)];
+          const c = symbols[Math.floor(Math.random()*symbols.length)];
+          this.reels=[a,b,c];
+
+          // 배당 계산: bet * multiplier
+          const mult = payout(a,b,c);
+          const winCoins = betAmount * mult;
+          const deltaCoins = -betAmount + winCoins;
+
+          // 슬롯은 결과를 “win/lose”로 단순화
+          const result = (deltaCoins >= 0) ? "win" : "lose";
+
+          // 슬롯의 점수 변화는 룰대로 +추가(승/패 점수) + 코인 변화(베팅 결과)
+          const base = RULES.slot;
+          const ds = result==="win" ? base.winS : base.loseS;
+          const dc = deltaCoins; // ✅ 배팅 기반
+
+          return { result, ds, dc };
+        },
+        draw(w,h){
+          ctx.fillStyle="#0a1022"; ctx.fillRect(0,0,w,h);
+
+          ctx.fillStyle="rgba(255,255,255,0.10)";
+          ctx.fillRect(w*0.2, h*0.25, w*0.6, h*0.35);
+
+          ctx.fillStyle="rgba(233,238,252,0.95)";
+          ctx.font="64px system-ui";
+          const text = `${this.reels[0]}   ${this.reels[1]}   ${this.reels[2]}`;
+          ctx.fillText(text, w*0.28, h*0.45);
+
+          // buttons
+          ctx.fillStyle="rgba(255,255,255,0.10)";
+          ctx.fillRect(0, h-110, w, 110);
+
+          ctx.font="18px system-ui";
+          ctx.fillStyle="rgba(233,238,252,0.95)";
+          ctx.fillText("BET -", w*0.14, h-55);
+          ctx.fillText("BET +", w*0.47, h-55);
+          ctx.fillText("SPIN",  w*0.80, h-55);
+        }
+      };
+    }
+
+    function start(){
+      cancelAnimationFrame(raf);
+      resize();
+
+      setMsg("게임 시작!", true);
+      last = performance.now();
+
+      if(g==="dodge") state = makeDodge();
+      else if(g==="clicker") state = makeClicker();
+      else if(g==="aim") state = makeAim();
+      else if(g==="rhythm") state = makeRhythm();
+      else if(g==="puzzle") state = makePuzzle();
+      else if(g==="tetris") state = makeTetris();
+      else state = makeSlot();
+
+      loop(last);
     }
 
     start();

@@ -1,11 +1,9 @@
 :root { color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#070a12; color:#e9eefc; }
-a { color: inherit; }
 .wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
-
 .card {
-  width:min(980px, 100%);
+  width:min(1100px, 100%);
   background:rgba(255,255,255,0.06);
   border:1px solid rgba(255,255,255,0.12);
   border-radius:16px;
@@ -16,6 +14,16 @@ a { color: inherit; }
 h1 { margin:0 0 10px; font-size:22px; }
 h2 { margin:0; font-size:16px; }
 p { margin:0; opacity:.85; line-height:1.5; }
+
+.grid { display:grid; grid-template-columns: 1.1fr 0.9fr; gap:12px; margin-top:12px; }
+@media (max-width: 980px){ .grid{ grid-template-columns:1fr; } }
+
+.panel {
+  background: rgba(0,0,0,0.25);
+  border:1px solid rgba(255,255,255,0.10);
+  border-radius:14px;
+  padding:12px;
+}
 
 .btn {
   border:1px solid rgba(255,255,255,0.16);
@@ -39,51 +47,36 @@ input {
   outline:none;
 }
 
-.grid {
-  display:grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap:12px;
-  margin-top:12px;
-}
-@media (max-width: 900px) {
-  .grid { grid-template-columns: 1fr; }
-}
-
-.panel {
-  background: rgba(0,0,0,0.25);
-  border:1px solid rgba(255,255,255,0.10);
-  border-radius:14px;
-  padding:12px;
-}
-
 .msg { font-size:13px; white-space:pre-wrap; opacity:.9; margin-top:10px; }
 .msg.err { color:#ff8a8a; }
 .msg.ok { color:#8dffb3; }
 
 .small { font-size:12px; opacity:.75; line-height:1.4; margin-top:6px; }
-.badge { font-size:12px; opacity:.85; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,0.14); }
+.badge { font-size:12px; opacity:.9; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,0.14); }
+code { background: rgba(255,255,255,0.08); padding:2px 6px; border-radius: 8px; }
 
 .gamebox {
-  height: 520px;
+  height: 560px;
   border-radius:14px;
   border:1px solid rgba(255,255,255,0.10);
-  background: radial-gradient(1200px 520px at 50% 0%, rgba(120,200,255,0.08), rgba(0,0,0,0.35));
+  background: radial-gradient(1200px 560px at 50% 0%, rgba(120,200,255,0.08), rgba(0,0,0,0.35));
   position: relative;
   overflow:hidden;
 }
-
 canvas { display:block; width:100%; height:100%; }
 
 /* Scoreboard */
 table { width:100%; border-collapse:collapse; font-size:13px; }
 th, td { padding:8px 8px; border-bottom:1px solid rgba(255,255,255,0.10); text-align:left; }
 th { opacity:.8; font-weight:700; }
-tr.top1 { background: rgba(255, 80, 80, 0.18); }
-tr.top2 { background: rgba(255, 230, 80, 0.14); }
-tr.top3 { background: rgba(110, 255, 170, 0.14); }
+
+tr.top1 { background: rgba(255, 80, 80, 0.18); }   /* 1등: 빨강 */
+tr.top2 { background: rgba(255, 230, 80, 0.14); }  /* 2등: 노랑 */
+tr.top3 { background: rgba(110, 255, 170, 0.14); } /* 3등: 초록 */
+
 .rankpill {
   display:inline-block;
-  min-width: 40px;
+  min-width: 44px;
   text-align:center;
   font-weight:900;
   border-radius: 999px;
