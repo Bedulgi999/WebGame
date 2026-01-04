@@ -13,7 +13,7 @@
       <div class="hrow">
         <div>
           <h1>Web Arcade</h1>
-          <p>게임을 이기면 Score/Coins가 오르고, 지면 떨어져요. 슬롯은 코인 배팅으로 코인을 늘릴 수 있어요.</p>
+          <p>이기면 Score/Coins 상승, 지면 하락. 슬롯은 코인 배팅으로 코인을 늘릴 수 있어요.</p>
         </div>
         <div class="badge" id="authBadge">상태: 확인 중…</div>
       </div>
@@ -77,11 +77,11 @@
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+    // === 너 프로젝트 값으로 유지 ===
     const SUPABASE_URL = "https://jwkjsmlicirmuujsmdfi.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_YfPtLavytOMWG5gHr7pEDg_Dy3j8Wld";
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/leaderboard`;
 
-    // ✅ 세션 유지/복원 필수 옵션
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         persistSession: true,
@@ -96,6 +96,23 @@
     const LS_COINS = "arcade_total_coins_v3";
     const LS_NAME  = "arcade_name_v3";
 
+    function getScore(){ return Number(localStorage.getItem(LS_SCORE)||"0")||0; }
+    function getCoins(){ return Number(localStorage.getItem(LS_COINS)||"200")||200; }
+    function setScore(v){ localStorage.setItem(LS_SCORE, String(Math.max(0, Math.trunc(v)))); }
+    function setCoins(v){ localStorage.setItem(LS_COINS, String(Math.max(0, Math.trunc(v)))); }
+
+    // ===== Rank Title (점수 기반 티어) =====
+    function rankTitle(score){
+      if(score >= 5000) return "Legend";
+      if(score >= 2500) return "Diamond";
+      if(score >= 1200) return "Platinum";
+      if(score >= 600)  return "Gold";
+      if(score >= 250)  return "Silver";
+      if(score >= 80)   return "Bronze";
+      return "Rookie";
+    }
+
+    // ===== UI refs =====
     const authBadge = document.getElementById("authBadge");
     const profileBox = document.getElementById("profileBox");
     const loginBox = document.getElementById("loginBox");
@@ -106,11 +123,6 @@
     const nameInput = document.getElementById("nameInput");
     const rewardHint = document.getElementById("rewardHint");
 
-    function getScore(){ return Number(localStorage.getItem(LS_SCORE)||"0")||0; }
-    function getCoins(){ return Number(localStorage.getItem(LS_COINS)||"200")||200; } // 초기 코인 200
-    function setScore(v){ localStorage.setItem(LS_SCORE, String(Math.max(0, Math.trunc(v)))); }
-    function setCoins(v){ localStorage.setItem(LS_COINS, String(Math.max(0, Math.trunc(v)))); }
-
     function esc(s){ return String(s).replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m])); }
     function setMsg(el, t, ok=false){ el.className="msg "+(ok?"ok":"err"); el.textContent=t||""; }
 
@@ -118,13 +130,12 @@
     const GAME_RULES = {
       dodge:  { winS: 40, loseS: -15, winC: 10, loseC: -5,  desc: "10초 생존" },
       clicker:{ winS: 30, loseS: -10, winC: 5,  loseC: -3,  desc: "클릭 목표" },
-      aim:    { winS: 35, loseS: -12, winC: 8,  loseC: -4,  desc: "타겟" },
-      rhythm: { winS: 55, loseS: -20, winC: 12, loseC: -6,  desc: "리듬 Space" },
-      puzzle: { winS: 60, loseS: -25, winC: 15, loseC: -8,  desc: "슬라이딩 퍼즐" },
-      tetris: { winS: 70, loseS: -30, winC: 18, loseC: -10, desc: "미니 테트리스" },
-      slot:   { winS: 10, loseS: -5,  winC: 0,  loseC: 0,   desc: "코인 배팅 슬롯(코인 증감은 배팅 결과)" },
+      aim:    { winS: 35, loseS: -12, winC: 8,  loseC: -4,  desc: "타겟 클릭" },
+      rhythm: { winS: 55, loseS: -20, winC: 12, loseC: -6,  desc: "Space 타이밍" },
+      puzzle: { winS: 60, loseS: -25, winC: 15, loseC: -8,  desc: "퍼즐 완성" },
+      tetris: { winS: 70, loseS: -30, winC: 18, loseC: -10, desc: "라인 3개" },
+      slot:   { winS: 10, loseS: -5,  winC: 0,  loseC: 0,   desc: "코인 배팅 슬롯" },
     };
-
     rewardHint.innerHTML = Object.entries(GAME_RULES).map(([k,v]) =>
       `<b>${k}</b>: WIN(S ${v.winS>=0?"+":""}${v.winS}, C ${v.winC>=0?"+":""}${v.winC}) / LOSE(S ${v.loseS}, C ${v.loseC}) - ${esc(v.desc)}`
     ).join("<br/>");
@@ -157,6 +168,7 @@
       const av=avatarUrl(s), dn=displayName(s), uid=s.user.id;
       const score=getScore(), coins=getCoins();
       const nick=(nameInput.value||"").trim().slice(0,12)||"Player";
+      const tier = rankTitle(score);
 
       profileBox.innerHTML = `
         <div style="display:flex; gap:12px; align-items:center;">
@@ -165,7 +177,9 @@
                  : `<div style="font-weight:900;opacity:.9;">${esc((dn||"U")[0]||"U")}</div>`}
           </div>
           <div style="min-width:0;">
-            <div style="font-weight:900;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(dn)}</div>
+            <div style="font-weight:900;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              ${esc(dn)} <span class="badge">${tier}</span>
+            </div>
             <div class="small" style="margin-top:2px;">user_id: <code>${esc(uid.slice(0,8))}</code>…</div>
           </div>
         </div>
@@ -188,16 +202,15 @@
       };
     }
 
-    // ===== Auth =====
-    document.getElementById("guestBtn").onclick = async ()=>{
+    // ===== Auth buttons =====
+    guestBtn.onclick = async ()=>{
       setMsg(msgEl,"");
       const { error } = await supabase.auth.signInAnonymously();
       if(error){
-        // 422이면 대시보드 설정 문제일 확률이 큼
         return setMsg(msgEl,
-          "게스트 로그인 실패(대부분 설정 문제):\n" +
+          "게스트 로그인 실패(422면 설정 문제일 확률 큼):\n" +
           error.message +
-          "\n\n✅ Supabase > Auth 설정에서\n- Anonymous Enabled\n- Allow signups ON\n- Captcha OFF(또는 토큰 구현)\n를 확인해줘.",
+          "\n\n✅ Supabase Dashboard > Authentication\n- Providers: Anonymous Enabled\n- Settings: Allow signups ON\n- Captcha/Bot protection OFF(또는 토큰 구현)\n확인해줘.",
           false
         );
       }
@@ -207,7 +220,7 @@
       setMsg(msgEl,"게스트 로그인 성공!",true);
     };
 
-    document.getElementById("googleBtn").onclick = async ()=>{
+    googleBtn.onclick = async ()=>{
       setMsg(msgEl,"");
       const redirectTo = `${location.origin}/index.html`;
       const { error } = await supabase.auth.signInWithOAuth({ provider:"google", options:{ redirectTo } });
@@ -232,7 +245,7 @@
       });
     });
 
-    // ===== Edge Function calls =====
+    // ===== Edge Function call helper =====
     async function callFn(body){
       const { data } = await supabase.auth.getSession();
       const token = data?.session?.access_token;
@@ -247,12 +260,17 @@
       return j;
     }
 
+    // ===== Scoreboard state (sorting) =====
+    let sortBy = "score"; // "rank"|"score"|"coins"|"time"
+    let sortDir = "desc"; // "asc"|"desc"
+
     let serverTop=[], serverMe=null, serverRank=null;
 
     function renderBoard(){
       const localScore=getScore(), localCoins=getCoins();
       const localName=(nameInput.value||"").trim().slice(0,12)||"Player";
 
+      // 서버 top은 이미 정렬되어서 옴
       const rows = (serverTop||[]).map((r,i)=>({
         rank:i+1,
         name:r.name,
@@ -261,11 +279,22 @@
         time:r.updated_at ? new Date(r.updated_at).toLocaleString() : ""
       }));
 
-      const myServerRow = serverMe ? `
-        <tr><td colspan="5" style="opacity:.55;">— 내 서버 기록 —</td></tr>
+      const head = `
+      <thead>
         <tr>
+          <th><button class="btn tiny" data-sort="rank">Rank ${sortBy==="rank" ? (sortDir==="asc"?"↑":"↓") : ""}</button></th>
+          <th>Name</th>
+          <th><button class="btn tiny" data-sort="score">Score ${sortBy==="score" ? (sortDir==="asc"?"↑":"↓") : ""}</button></th>
+          <th><button class="btn tiny" data-sort="coins">Coins ${sortBy==="coins" ? (sortDir==="asc"?"↑":"↓") : ""}</button></th>
+          <th><button class="btn tiny" data-sort="time">Time ${sortBy==="time" ? (sortDir==="asc"?"↑":"↓") : ""}</button></th>
+        </tr>
+      </thead>`;
+
+      const myServerRow = serverMe ? `
+        <tr><td colspan="5" style="opacity:.55;">— 내 서버 순위 —</td></tr>
+        <tr style="outline:1px solid rgba(120,200,255,0.35);">
           <td><span class="rankpill">#${serverRank ?? "-"}</span></td>
-          <td>${esc(serverMe.name)}</td>
+          <td>${esc(serverMe.name)} <span class="badge">ME</span> <span class="badge">${rankTitle(serverMe.best_score)}</span></td>
           <td>${serverMe.best_score}</td>
           <td>${serverMe.best_coins}</td>
           <td>${esc(new Date(serverMe.updated_at).toLocaleString())}</td>
@@ -273,40 +302,55 @@
 
       boardEl.innerHTML = `
         <table>
-          <thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Coins</th><th>Time</th></tr></thead>
+          ${head}
           <tbody>
             ${rows.map(r=>{
               const cls = r.rank===1?"top1":r.rank===2?"top2":r.rank===3?"top3":"";
               return `<tr class="${cls}">
                 <td><span class="rankpill">#${r.rank}</span></td>
-                <td>${esc(r.name)}</td>
+                <td>${esc(r.name)} <span class="badge">${rankTitle(r.score)}</span></td>
                 <td>${r.score}</td>
                 <td>${r.coins}</td>
                 <td>${esc(r.time)}</td>
               </tr>`;
             }).join("")}
+
             ${myServerRow}
+
             <tr><td colspan="5" style="opacity:.55;">— 내 로컬 누적 —</td></tr>
             <tr>
               <td><span class="rankpill">ME</span></td>
-              <td>${esc(localName)} (local)</td>
+              <td>${esc(localName)} (local) <span class="badge">${rankTitle(localScore)}</span></td>
               <td>${localScore}</td>
               <td>${localCoins}</td>
               <td>-</td>
             </tr>
           </tbody>
-        </table>`;
+        </table>
+      `;
+
+      // 헤더 클릭 정렬
+      boardEl.querySelectorAll("[data-sort]").forEach(b=>{
+        b.onclick = async ()=>{
+          const k = b.getAttribute("data-sort");
+          if (sortBy === k) sortDir = (sortDir === "asc" ? "desc" : "asc");
+          else sortBy = k, sortDir = "desc";
+          await syncAll();
+        };
+      });
     }
 
     async function syncAll(){
       setMsg(rankMsg,"서버 데이터 불러오는 중...");
       try{
-        const top = await callFn({ action:"top", limit:10 });
+        // 서버에서 정렬된 top10 받기
+        const top = await callFn({ action:"top", limit:10, sortBy, sortDir });
         serverTop = top.data || [];
         const me = await callFn({ action:"me" });
         serverMe = me.me || null;
         serverRank = me.rank || null;
-        setMsg(rankMsg,"서버 동기화 완료",true);
+
+        setMsg(rankMsg,`서버 동기화 완료 (정렬: ${sortBy.toUpperCase()} ${sortDir.toUpperCase()})`,true);
         renderBoard();
       }catch(e){
         setMsg(rankMsg,"Sync 실패: "+(e?.message||e),false);
@@ -333,7 +377,7 @@
     // ===== Receive game result =====
     const u = new URL(location.href);
     const result = u.searchParams.get("result");
-    const g = u.searchParams.get("g") || "";
+    const gameFrom = u.searchParams.get("g") || "";
     const ds = Number(u.searchParams.get("ds")||"0");
     const dc = Number(u.searchParams.get("dc")||"0");
 
@@ -341,7 +385,7 @@
       setScore(getScore()+ds);
       setCoins(getCoins()+dc);
       setMsg(msgEl,
-        `게임: ${g}\n결과: ${result.toUpperCase()}\nScore 변화: ${ds>=0?"+":""}${ds}\nCoins 변화: ${dc>=0?"+":""}${dc}\n누적 Score=${getScore()} / Coins=${getCoins()}`,
+        `게임: ${gameFrom}\n결과: ${result.toUpperCase()}\nScore 변화: ${ds>=0?"+":""}${ds}\nCoins 변화: ${dc>=0?"+":""}${dc}\n누적 Score=${getScore()} / Coins=${getCoins()} / Rank=${rankTitle(getScore())}`,
         true
       );
       ["result","g","ds","dc"].forEach(k=>u.searchParams.delete(k));

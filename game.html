@@ -74,7 +74,7 @@
     function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
     function dist(x1,y1,x2,y2){ return Math.hypot(x1-x2, y1-y2); }
 
-    // ✅ 튕김 방지: 세션 복원 재시도
+    // ✅ 튕김 방지
     async function requireSession(){
       let s = await supabase.auth.getSession();
       if(!s.data?.session){
@@ -89,14 +89,13 @@
     }
     await requireSession();
 
-    // 로컬 코인(슬롯 배팅용)
+    // 로컬 코인
     const LS_COINS = "arcade_total_coins_v3";
     function getCoins(){ return Number(localStorage.getItem(LS_COINS)||"200")||200; }
 
     const qs = new URLSearchParams(location.search);
     const g = qs.get("g") || "dodge";
 
-    // 게임별 보상(슬롯은 dc를 배팅 결과로 직접 계산)
     const RULES = {
       dodge:  { winS: 40, loseS: -15, winC: 10, loseC: -5 },
       clicker:{ winS: 30, loseS: -10, winC: 5,  loseC: -3 },
@@ -115,7 +114,6 @@
       }, 650);
     }
 
-    // Canvas sizing
     function resize(){
       const rect = canvas.getBoundingClientRect();
       const dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
@@ -125,7 +123,6 @@
     }
     addEventListener("resize", resize);
 
-    // Input
     const key = { left:false,right:false,up:false,down:false, space:false };
     addEventListener("keydown", (e)=>{
       if (e.code==="ArrowLeft"||e.code==="KeyA") key.left=true;
@@ -148,7 +145,6 @@
       lastClick = { x: ev.clientX-rect.left, y: ev.clientY-rect.top, hit:true };
     });
 
-    // Loop
     let state = null;
     let raf = 0;
     let last = 0;
@@ -175,7 +171,6 @@
       raf = requestAnimationFrame(loop);
     }
 
-    // ===== Games =====
     function makeDodge(){
       titleEl.textContent = "Dodge";
       descEl.textContent = "10초 생존하면 WIN. WASD/방향키 이동.";
@@ -274,8 +269,8 @@
 
     function makeRhythm(){
       titleEl.textContent="Rhythm";
-      descEl.textContent="바가 중앙에 올 때 Space! 6번 성공하면 WIN. 실수 3번이면 LOSE.";
-      helpEl.innerHTML="세로 바가 중앙 영역에 들어오면 Space를 누르세요.";
+      descEl.textContent="중앙에 올 때 Space! 6번 성공 WIN. 실수 3번 LOSE.";
+      helpEl.innerHTML="바가 중앙 영역에 들어오면 Space를 누르세요.";
       return {
         t:0, duration:18, hits:0, miss:0, x:0, vx:420, cooldown:0, can:true,
         step(dt,w,h){
@@ -311,7 +306,7 @@
 
     function makePuzzle(){
       titleEl.textContent="Puzzle";
-      descEl.textContent="4x4 슬라이딩 퍼즐. 제한시간 안에 맞추면 WIN.";
+      descEl.textContent="4x4 슬라이딩 퍼즐. 제한시간 내 완성 WIN.";
       helpEl.innerHTML="빈칸 옆 타일을 클릭하면 이동합니다.";
       const N=4;
       function isSolved(arr){
@@ -516,10 +511,11 @@
       };
     }
 
+    // ✅ 슬롯: 심볼/버튼 간격 고정
     function makeSlot(){
       titleEl.textContent="Slot (Bet)";
-      descEl.textContent="코인을 배팅해서 늘리세요. (Space 또는 하단 버튼)";
-      helpEl.innerHTML="BET - / BET + 로 배팅 조절 후 SPIN. 3개 일치면 대박!";
+      descEl.textContent="코인을 배팅해서 늘리세요. (Space 또는 SPIN 클릭)";
+      helpEl.innerHTML="BET - / BET +로 배팅 조절 후 SPIN. 3개 일치면 대박!";
       const symbols = ["🍒","🍋","🔔","7","⭐"];
       let bet = 10;
 
@@ -534,17 +530,20 @@
       }
 
       return {
-        reels:["?","?","?"],
+        reels:["🍋","🔔","7"],
         step(dt,w,h){
+          // 하단 버튼 클릭 영역 정확히
           if(lastClick.hit){
             const {x,y} = lastClick; lastClick.hit=false;
             if(y > h-110){
-              if(x < w*0.33) bet = Math.max(1, bet-5);
-              else if(x < w*0.66) bet = Math.min(200, bet+5);
+              const third = w/3;
+              if(x < third) bet = Math.max(1, bet-5);
+              else if(x < third*2) bet = Math.min(200, bet+5);
               else return this.spin(bet);
             }
           }
           if(key.space){ key.space=false; return this.spin(bet); }
+
           hudEl.textContent = `보유 코인: ${getCoins()} · 배팅: ${bet}`;
           extraEl.textContent = "하단 버튼 클릭 또는 Space로 SPIN";
           return null;
@@ -574,22 +573,61 @@
         draw(w,h){
           ctx.fillStyle="#0a1022"; ctx.fillRect(0,0,w,h);
 
-          ctx.fillStyle="rgba(255,255,255,0.10)";
-          ctx.fillRect(w*0.2, h*0.25, w*0.6, h*0.35);
+          // 릴 박스 3개 고정 폭
+          const boxW = w * 0.18;
+          const gap  = w * 0.05;
+          const totalW = boxW*3 + gap*2;
+          const startX = (w - totalW)/2;
+          const boxY = h*0.22;
+          const boxH = h*0.28;
 
-          ctx.fillStyle="rgba(233,238,252,0.95)";
-          ctx.font="64px system-ui";
-          const text = `${this.reels[0]}   ${this.reels[1]}   ${this.reels[2]}`;
-          ctx.fillText(text, w*0.28, h*0.45);
+          ctx.fillStyle="rgba(255,255,255,0.08)";
+          ctx.fillRect(startX-18, boxY-18, totalW+36, boxH+36);
 
-          ctx.fillStyle="rgba(255,255,255,0.10)";
-          ctx.fillRect(0, h-110, w, 110);
+          for(let i=0;i<3;i++){
+            const x = startX + i*(boxW+gap);
+            ctx.fillStyle="rgba(255,255,255,0.10)";
+            ctx.fillRect(x, boxY, boxW, boxH);
+            ctx.strokeStyle="rgba(255,255,255,0.14)";
+            ctx.strokeRect(x, boxY, boxW, boxH);
 
-          ctx.font="18px system-ui";
-          ctx.fillStyle="rgba(233,238,252,0.95)";
-          ctx.fillText("BET -", w*0.14, h-55);
-          ctx.fillText("BET +", w*0.47, h-55);
-          ctx.fillText("SPIN",  w*0.80, h-55);
+            ctx.fillStyle="rgba(233,238,252,0.95)";
+            ctx.font = `${Math.floor(boxH*0.55)}px system-ui`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(String(this.reels[i]), x + boxW/2, boxY + boxH/2);
+          }
+
+          // 하단 버튼 3등분
+          const barH = 110;
+          const barY = h - barH;
+          ctx.fillStyle="rgba(255,255,255,0.08)";
+          ctx.fillRect(0, barY, w, barH);
+
+          const third = w/3;
+          const btnY = barY + 20;
+          const btnH = barH - 40;
+          const labels = ["BET -", "BET +", "SPIN"];
+
+          for(let i=0;i<3;i++){
+            const x = i*third + 16;
+            const bw = third - 32;
+
+            ctx.fillStyle="rgba(0,0,0,0.18)";
+            ctx.fillRect(x, btnY, bw, btnH);
+            ctx.strokeStyle="rgba(255,255,255,0.14)";
+            ctx.strokeRect(x, btnY, bw, btnH);
+
+            ctx.fillStyle="rgba(233,238,252,0.95)";
+            ctx.font="18px system-ui";
+            ctx.textAlign="center";
+            ctx.textBaseline="middle";
+            ctx.fillText(labels[i], x + bw/2, btnY + btnH/2);
+          }
+
+          // reset
+          ctx.textAlign = "left";
+          ctx.textBaseline = "alphabetic";
         }
       };
     }
