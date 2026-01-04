@@ -19,7 +19,6 @@
       </div>
 
       <div class="grid">
-        <!-- LEFT -->
         <div class="panel">
           <h2>프로필</h2>
           <div id="profileBox" style="margin-top:10px;"></div>
@@ -39,7 +38,6 @@
           <div class="small">게임별 승/패 보상이 다릅니다.</div>
 
           <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-            <!-- 기존 3 + 추가 4 + 슬롯(배팅) 포함 -->
             <button class="btn" data-game="dodge">Dodge</button>
             <button class="btn" data-game="clicker">Clicker</button>
             <button class="btn" data-game="aim">Aim</button>
@@ -52,7 +50,6 @@
           <div class="small" id="rewardHint" style="margin-top:10px;"></div>
         </div>
 
-        <!-- RIGHT -->
         <div class="panel">
           <div class="hrow">
             <h2>스코어보드</h2>
@@ -77,20 +74,12 @@
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-    // ✅ Vercel 환경변수로 주면 window.__ENV__를 통해 읽을 수 없어서
-    // 정적 사이트에서는 보통 "하드코딩" 또는 "env.js" 파일을 씀.
-    // 여기서는 fallback 방식 제공:
-    const FALLBACK_SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co";
-    const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_YfPtLavytOMWG5gHr7pEDg_Dy3j8Wld";
-
-    // 하드코딩이 싫으면: 아래 두 줄을 네 값으로 확정해서 넣어.
-    const SUPABASE_URL = FALLBACK_SUPABASE_URL;
-    const SUPABASE_ANON_KEY = FALLBACK_SUPABASE_ANON_KEY;
-
+    // ✅ 너 프로젝트로 고정 (NXDOMAIN 해결)
+    const SUPABASE_URL = "https://jwkjsmlicirmuujsmdfi.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_YfPtLavytOMWG5gHr7pEDg_Dy3j8Wld";
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/leaderboard`;
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ===== Local state (Score + Coins) =====
     const LS_SCORE = "arcade_total_score_v2";
     const LS_COINS = "arcade_total_coins_v2";
     const LS_NAME  = "arcade_name_v2";
@@ -106,47 +95,33 @@
     const rewardHint = document.getElementById("rewardHint");
 
     function getScore(){ return Number(localStorage.getItem(LS_SCORE)||"0")||0; }
-    function getCoins(){ return Number(localStorage.getItem(LS_COINS)||"200")||200; } // 기본 코인 200
+    function getCoins(){ return Number(localStorage.getItem(LS_COINS)||"200")||200; }
     function setScore(v){ localStorage.setItem(LS_SCORE, String(Math.max(0, Math.trunc(v)))); }
     function setCoins(v){ localStorage.setItem(LS_COINS, String(Math.max(0, Math.trunc(v)))); }
 
     function esc(s){ return String(s).replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m])); }
-    function setMsg(el, t, ok=false){ el.className = "msg " + (ok?"ok":"err"); el.textContent = t||""; }
+    function setMsg(el, t, ok=false){ el.className="msg "+(ok?"ok":"err"); el.textContent=t||""; }
 
-    // ===== Game rewards (게임별 상이) =====
-    // result=win/lose + deltaScore/deltaCoins를 game.html에서 넘겨줌
     const GAME_RULES = {
       dodge:  { winS: 40, loseS: -15, winC: 10, loseC: -5,  desc: "10초 생존하면 WIN" },
       clicker:{ winS: 30, loseS: -10, winC: 5,  loseC: -3,  desc: "제한시간 내 목표 클릭" },
       aim:    { winS: 35, loseS: -12, winC: 8,  loseC: -4,  desc: "타겟 맞히기" },
-      rhythm: { winS: 55, loseS: -20, winC: 12, loseC: -6,  desc: "타이밍에 Space" },
-      puzzle: { winS: 60, loseS: -25, winC: 15, loseC: -8,  desc: "슬라이딩 퍼즐 맞추기" },
-      tetris: { winS: 70, loseS: -30, winC: 18, loseC: -10, desc: "미니 테트리스(라인 목표)" },
-      // 슬롯은 배팅 기반: game.html에서 실제 deltaCoins를 계산해서 넘김
+      rhythm: { winS: 55, loseS: -20, winC: 12, loseC: -6,  desc: "타이밍 Space" },
+      puzzle: { winS: 60, loseS: -25, winC: 15, loseC: -8,  desc: "슬라이딩 퍼즐" },
+      tetris: { winS: 70, loseS: -30, winC: 18, loseC: -10, desc: "라인 목표" },
       slot:   { winS: 10, loseS: -5,  winC: 0,  loseC: 0,   desc: "코인 배팅 슬롯" },
     };
 
     function renderRewardHint(){
-      rewardHint.innerHTML = Object.entries(GAME_RULES).map(([k,v]) => {
-        const tag = k === "slot" ? "<b>slot</b>" : `<b>${k}</b>`;
-        return `${tag}: WIN (S ${v.winS>=0?"+":""}${v.winS}, C ${v.winC>=0?"+":""}${v.winC}) / LOSE (S ${v.loseS}, C ${v.loseC}) - ${esc(v.desc)}`;
-      }).join("<br/>");
+      rewardHint.innerHTML = Object.entries(GAME_RULES).map(([k,v]) =>
+        `<b>${k}</b>: WIN (S ${v.winS>=0?"+":""}${v.winS}, C ${v.winC>=0?"+":""}${v.winC}) / LOSE (S ${v.loseS}, C ${v.loseC}) - ${esc(v.desc)}`
+      ).join("<br/>");
     }
 
-    // ===== Profile =====
     let currentSession = null;
-
-    function avatarUrl(s){
-      const md = s?.user?.user_metadata || {};
-      return md.avatar_url || md.picture || null;
-    }
-    function displayName(s){
-      const md = s?.user?.user_metadata || {};
-      return (md.full_name || md.name || md.email || "Guest");
-    }
-    function providerName(s){
-      return s?.user?.app_metadata?.provider || (s?.user?.is_anonymous ? "anonymous" : "unknown");
-    }
+    function avatarUrl(s){ const md=s?.user?.user_metadata||{}; return md.avatar_url||md.picture||null; }
+    function displayName(s){ const md=s?.user?.user_metadata||{}; return (md.full_name||md.name||md.email||"Guest"); }
+    function providerName(s){ return s?.user?.app_metadata?.provider || (s?.user?.is_anonymous ? "anonymous" : "unknown"); }
 
     function renderProfile(s){
       if(!s){
@@ -156,116 +131,96 @@
         return;
       }
       loginBox.style.display = "none";
-      const prov = providerName(s);
-      authBadge.textContent = `상태: 로그인됨 (${prov})`;
+      authBadge.textContent = `상태: 로그인됨 (${providerName(s)})`;
 
-      const av = avatarUrl(s);
-      const dn = displayName(s);
-      const uid = s.user.id;
-
-      const score = getScore();
-      const coins = getCoins();
-      const nick = (nameInput.value||"").trim().slice(0,12) || "Player";
+      const av=avatarUrl(s), dn=displayName(s), uid=s.user.id;
+      const score=getScore(), coins=getCoins();
+      const nick=(nameInput.value||"").trim().slice(0,12)||"Player";
 
       profileBox.innerHTML = `
         <div style="display:flex; gap:12px; align-items:center;">
           <div style="width:52px;height:52px;border-radius:14px;border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.06);overflow:hidden;display:flex;align-items:center;justify-content:center;">
-            ${av ? `<img src="${esc(av)}" style="width:100%;height:100%;object-fit:cover;">`
-                 : `<div style="font-weight:900;opacity:.9;">${esc((dn||"U")[0]||"U")}</div>`}
+            ${av ? `<img src="${esc(av)}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="font-weight:900;opacity:.9;">${esc((dn||"U")[0]||"U")}</div>`}
           </div>
           <div style="min-width:0;">
             <div style="font-weight:900;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(dn)}</div>
-            <div class="small" style="margin-top:2px;">user_id: <code>${esc(uid.slice(0,8))}</code>… · provider: <code>${esc(prov)}</code></div>
+            <div class="small" style="margin-top:2px;">user_id: <code>${esc(uid.slice(0,8))}</code>…</div>
           </div>
         </div>
-
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
           <span class="badge">로컬 Score: <b>${score}</b></span>
           <span class="badge">로컬 Coins: <b>${coins}</b></span>
-          <span class="badge">제출 닉네임: <b>${esc(nick)}</b></span>
+          <span class="badge">닉네임: <b>${esc(nick)}</b></span>
         </div>
-
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
           <button class="btn danger" id="logoutBtn">로그아웃</button>
         </div>
       `;
-
-      document.getElementById("logoutBtn").onclick = async () => {
+      document.getElementById("logoutBtn").onclick = async ()=>{
         await supabase.auth.signOut();
-        currentSession = null;
+        currentSession=null;
         renderProfile(null);
         renderBoard();
-        setMsg(msgEl, "로그아웃됨", true);
+        setMsg(msgEl,"로그아웃됨",true);
       };
     }
 
-    // ===== Auth buttons =====
-    document.getElementById("guestBtn").onclick = async () => {
-      setMsg(msgEl, "");
+    // 로그인 버튼
+    document.getElementById("guestBtn").onclick = async ()=>{
+      setMsg(msgEl,"");
       const { error } = await supabase.auth.signInAnonymously();
-      if(error) return setMsg(msgEl, "게스트 로그인 실패:\n"+error.message, false);
+      if(error) return setMsg(msgEl,"게스트 로그인 실패:\n"+error.message,false);
       const { data } = await supabase.auth.getSession();
-      currentSession = data.session;
+      currentSession=data.session;
       renderProfile(currentSession);
-      setMsg(msgEl, "게스트 로그인 성공!", true);
+      setMsg(msgEl,"게스트 로그인 성공!",true);
     };
 
-    document.getElementById("googleBtn").onclick = async () => {
-      setMsg(msgEl, "");
+    document.getElementById("googleBtn").onclick = async ()=>{
+      setMsg(msgEl,"");
       const redirectTo = `${location.origin}/index.html`;
       const { error } = await supabase.auth.signInWithOAuth({ provider:"google", options:{ redirectTo } });
-      if(error) setMsg(msgEl, "Google 로그인 시작 실패:\n"+error.message, false);
+      if(error) setMsg(msgEl,"Google 로그인 시작 실패:\n"+error.message,false);
     };
 
-    supabase.auth.onAuthStateChange((_, session) => {
-      currentSession = session;
+    supabase.auth.onAuthStateChange((_, session)=>{
+      currentSession=session;
       renderProfile(currentSession);
     });
 
-    // ===== 게임 진입 =====
+    // 게임 진입
     document.querySelectorAll("[data-game]").forEach(btn=>{
       btn.addEventListener("click", async ()=>{
         const { data } = await supabase.auth.getSession();
-        if(!data?.session){
-          setMsg(msgEl, "먼저 로그인해줘.", false);
-          return;
-        }
+        if(!data?.session) return setMsg(msgEl,"먼저 로그인해줘.",false);
         const g = btn.getAttribute("data-game");
         location.href = `/game.html?g=${encodeURIComponent(g)}`;
       });
     });
 
-    // ===== 서버 통신 =====
+    // 스코어보드(서버)
     async function callFn(body){
       const { data } = await supabase.auth.getSession();
       const token = data?.session?.access_token;
       if(!token) throw new Error("No auth session");
-      const res = await fetch(FUNCTION_URL, {
+      const res = await fetch(FUNCTION_URL,{
         method:"POST",
         headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token },
         body: JSON.stringify(body)
       });
       const j = await res.json().catch(()=> ({}));
-      if(!res.ok || j.ok === false) throw new Error(j.error || j.message || ("HTTP "+res.status));
+      if(!res.ok || j.ok===false) throw new Error(j.error||j.message||("HTTP "+res.status));
       return j;
     }
 
-    // ===== 스코어보드 렌더 =====
-    let serverTop = [];
-    let serverMe = null;
-    let serverRank = null;
+    let serverTop=[], serverMe=null, serverRank=null;
 
     function renderBoard(){
-      const localScore = getScore();
-      const localCoins = getCoins();
-      const localName = (nameInput.value||"").trim().slice(0,12) || "Player";
+      const localScore=getScore(), localCoins=getCoins();
+      const localName=(nameInput.value||"").trim().slice(0,12)||"Player";
 
       const rows = (serverTop||[]).map((r,i)=>({
-        rank: i+1,
-        name: r.name,
-        score: r.best_score,
-        coins: r.best_coins,
-        time: r.updated_at ? new Date(r.updated_at).toLocaleString() : ""
+        rank:i+1, name:r.name, score:r.best_score, coins:r.best_coins, time:r.updated_at?new Date(r.updated_at).toLocaleString():""
       }));
 
       const myServerRow = serverMe ? `
@@ -276,14 +231,11 @@
           <td>${serverMe.best_score}</td>
           <td>${serverMe.best_coins}</td>
           <td>${esc(new Date(serverMe.updated_at).toLocaleString())}</td>
-        </tr>
-      ` : "";
+        </tr>` : "";
 
       boardEl.innerHTML = `
         <table>
-          <thead>
-            <tr><th>Rank</th><th>Name</th><th>Score</th><th>Coins</th><th>Time</th></tr>
-          </thead>
+          <thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Coins</th><th>Time</th></tr></thead>
           <tbody>
             ${rows.map(r=>{
               const cls = r.rank===1?"top1":r.rank===2?"top2":r.rank===3?"top3":"";
@@ -305,68 +257,54 @@
               <td>-</td>
             </tr>
           </tbody>
-        </table>
-      `;
+        </table>`;
     }
 
     async function syncAll(){
-      setMsg(rankMsg, "서버 데이터 불러오는 중...");
+      setMsg(rankMsg,"서버 데이터 불러오는 중...");
       try{
         const top = await callFn({ action:"top", limit:10 });
         serverTop = top.data || [];
-
         const me = await callFn({ action:"me" });
         serverMe = me.me || null;
         serverRank = me.rank || null;
-
-        setMsg(rankMsg, "서버 동기화 완료", true);
+        setMsg(rankMsg,"서버 동기화 완료",true);
         renderBoard();
       }catch(e){
-        setMsg(rankMsg, "Sync 실패: "+(e?.message||e), false);
+        setMsg(rankMsg,"Sync 실패: "+(e?.message||e),false);
       }
     }
 
     async function submitBest(){
-      setMsg(rankMsg, "서버에 제출 중(최고 기록만 저장)...");
+      setMsg(rankMsg,"서버에 제출 중(최고 기록만 저장)...");
       try{
         const { data } = await supabase.auth.getSession();
-        if(!data?.session) return setMsg(rankMsg, "먼저 로그인해줘.", false);
-
-        const name = (nameInput.value||"").trim().slice(0,12) || "Player";
-        const score = getScore();
-        const coins = getCoins();
-
-        await callFn({ action:"submit", name, score, coins });
-        setMsg(rankMsg, "제출 완료(필요 시 갱신). Sync 중...", true);
+        if(!data?.session) return setMsg(rankMsg,"먼저 로그인해줘.",false);
+        const name=(nameInput.value||"").trim().slice(0,12)||"Player";
+        await callFn({ action:"submit", name, score:getScore(), coins:getCoins() });
+        setMsg(rankMsg,"제출 완료. Sync 중...",true);
         await syncAll();
       }catch(e){
-        setMsg(rankMsg, "제출 실패: "+(e?.message||e), false);
+        setMsg(rankMsg,"제출 실패: "+(e?.message||e),false);
       }
     }
 
     document.getElementById("syncBtn").onclick = syncAll;
     document.getElementById("submitBtn").onclick = submitBest;
 
-    // ===== 게임 결과 수신: game.html이 ?result=win/lose&g=...&ds=..&dc=..로 돌아옴 =====
-    const url = new URL(location.href);
-    const result = url.searchParams.get("result");
-    const g = url.searchParams.get("g");
-    const ds = Number(url.searchParams.get("ds") || "0");
-    const dc = Number(url.searchParams.get("dc") || "0");
+    // 게임 결과 반영
+    const u = new URL(location.href);
+    const result = u.searchParams.get("result");
+    const g = u.searchParams.get("g") || "";
+    const ds = Number(u.searchParams.get("ds")||"0");
+    const dc = Number(u.searchParams.get("dc")||"0");
 
-    if(result === "win" || result === "lose"){
-      // 로컬 누적 반영
-      setScore(getScore() + ds);
-      setCoins(getCoins() + dc);
-
-      setMsg(msgEl,
-        `게임: ${g}\n결과: ${result.toUpperCase()}\nScore 변화: ${ds>=0?"+":""}${ds}\nCoins 변화: ${dc>=0?"+":""}${dc}\n누적 Score=${getScore()} / Coins=${getCoins()}`,
-        true
-      );
-
-      // URL 정리
-      ["result","g","ds","dc"].forEach(k=> url.searchParams.delete(k));
-      history.replaceState({}, "", url.pathname + (url.searchParams.toString()?("?"+url.searchParams.toString()):""));
+    if(result==="win"||result==="lose"){
+      setScore(getScore()+ds);
+      setCoins(getCoins()+dc);
+      setMsg(msgEl, `게임: ${g}\n결과: ${result.toUpperCase()}\nScore 변화: ${ds>=0?"+":""}${ds}\nCoins 변화: ${dc>=0?"+":""}${dc}\n누적 Score=${getScore()} / Coins=${getCoins()}`, true);
+      ["result","g","ds","dc"].forEach(k=>u.searchParams.delete(k));
+      history.replaceState({}, "", u.pathname + (u.searchParams.toString()?("?"+u.searchParams.toString()):""));
     }
 
     // 닉네임 저장
@@ -374,7 +312,6 @@
     if(savedName) nameInput.value = savedName;
     nameInput.addEventListener("input", ()=> localStorage.setItem(LS_NAME, (nameInput.value||"").trim().slice(0,12)));
 
-    // init
     renderRewardHint();
     const init = await supabase.auth.getSession();
     currentSession = init.data?.session || null;
