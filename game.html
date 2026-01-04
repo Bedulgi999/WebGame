@@ -4,11 +4,60 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Web Arcade - Game</title>
-  <link rel="stylesheet" href="/styles.css" />
   <link rel="icon" href="data:," />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#070a12; color:#e9eefc; }
+    .wrap { min-height:100vh; display:flex; align-items:flex-start; justify-content:center; padding:24px; }
+    .card {
+      width:min(1100px, 100%);
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:16px;
+      padding:18px;
+      box-shadow:0 12px 40px rgba(0,0,0,0.35);
+    }
+    .hrow { display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+    h1 { margin:0 0 6px; font-size:22px; }
+    .small { font-size:12px; opacity:.78; line-height:1.4; margin-top:6px; }
+    .panel {
+      background: rgba(0,0,0,0.25);
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:14px;
+      padding:12px;
+    }
+    .grid { display:grid; grid-template-columns: 1.2fr 0.8fr; gap:12px; margin-top:12px; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+
+    .btn {
+      border:1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.08);
+      color:#e9eefc;
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:900;
+    }
+    .btn:hover { background: rgba(255,255,255,0.12); }
+    .msg { font-size:13px; white-space:pre-wrap; opacity:.95; margin-top:10px; }
+    .msg.err { color:#ff8a8a; }
+    .msg.ok { color:#8dffb3; }
+
+    .gamebox {
+      height: 560px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,0.10);
+      background: radial-gradient(1200px 560px at 50% 0%, rgba(120,200,255,0.08), rgba(0,0,0,0.35));
+      position: relative;
+      overflow:hidden;
+    }
+    canvas { display:block; width:100%; height:100%; }
+  </style>
 </head>
+
 <body>
-  <div class="wrap" style="align-items:flex-start;">
+  <div class="wrap">
     <div class="card">
       <div class="hrow">
         <div>
@@ -23,7 +72,6 @@
 
       <div class="grid">
         <div class="panel">
-          <h2>플레이</h2>
           <div class="gamebox"><canvas id="c"></canvas></div>
           <div class="msg" id="msg"></div>
           <div class="small" id="hud"></div>
@@ -31,12 +79,9 @@
         </div>
 
         <div class="panel">
-          <h2>도움말</h2>
           <div class="small" id="help"></div>
           <hr style="border:0;border-top:1px solid rgba(255,255,255,0.10); margin:12px 0;">
-          <div class="small">
-            종료 시 결과가 허브로 전달되어 누적 Score/Coins가 갱신됩니다.
-          </div>
+          <div class="small">종료 시 결과가 허브로 전달되어 누적 Score/Coins가 갱신됩니다.</div>
         </div>
       </div>
     </div>
@@ -74,7 +119,7 @@
     function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
     function dist(x1,y1,x2,y2){ return Math.hypot(x1-x2, y1-y2); }
 
-    // ✅ 튕김 방지
+    // ✅ 로그인 세션 없으면 허브로
     async function requireSession(){
       let s = await supabase.auth.getSession();
       if(!s.data?.session){
@@ -89,7 +134,6 @@
     }
     await requireSession();
 
-    // 로컬 코인
     const LS_COINS = "arcade_total_coins_v3";
     function getCoins(){ return Number(localStorage.getItem(LS_COINS)||"200")||200; }
 
@@ -272,8 +316,8 @@
       descEl.textContent="중앙에 올 때 Space! 6번 성공 WIN. 실수 3번 LOSE.";
       helpEl.innerHTML="바가 중앙 영역에 들어오면 Space를 누르세요.";
       return {
-        t:0, duration:18, hits:0, miss:0, x:0, vx:420, cooldown:0, can:true,
-        step(dt,w,h){
+        t:0, duration:18, hits:0, miss:0, x:0, vx:420, cooldown:0, canRotate:true,
+        step(dt,w){
           this.t += dt;
           this.cooldown = Math.max(0, this.cooldown - dt);
           this.x += this.vx*dt;
@@ -284,6 +328,7 @@
 
           if(key.space && this.cooldown<=0){
             this.cooldown = 0.25;
+            key.space=false;
             if(okZone) this.hits++; else this.miss++;
           }
           hudEl.textContent = `Hits ${this.hits}/6 · Miss ${this.miss}/3 · 남은 ${(this.duration-this.t).toFixed(1)}s`;
@@ -359,6 +404,8 @@
           ctx.fillRect(ox,oy,size,size);
 
           ctx.font = "20px system-ui";
+          ctx.textAlign="center";
+          ctx.textBaseline="middle";
           for(let i=0;i<N*N;i++){
             const v=this.tiles[i];
             const x=ox+(i%N)*cell, y=oy+Math.floor(i/N)*cell;
@@ -368,8 +415,10 @@
             ctx.fillStyle="rgba(120,200,255,0.20)";
             ctx.fillRect(x+6,y+6,cell-12,cell-12);
             ctx.fillStyle="rgba(233,238,252,0.95)";
-            ctx.fillText(String(v), x+cell/2-6, y+cell/2+7);
+            ctx.fillText(String(v), x+cell/2, y+cell/2);
           }
+          ctx.textAlign="left";
+          ctx.textBaseline="alphabetic";
         }
       };
     }
@@ -455,6 +504,7 @@
             this.canRotate=false;
             const p2 = rot(this.piece);
             if(!collide(this.grid,p2,this.px,this.py)) this.piece=p2;
+            key.space=false;
           }
           if(!key.space) this.canRotate=true;
 
@@ -511,7 +561,7 @@
       };
     }
 
-    // ✅ 슬롯: 심볼/버튼 간격 고정
+    // ✅ SLOT (간격/버튼 클릭영역 고정)
     function makeSlot(){
       titleEl.textContent="Slot (Bet)";
       descEl.textContent="코인을 배팅해서 늘리세요. (Space 또는 SPIN 클릭)";
@@ -532,7 +582,6 @@
       return {
         reels:["🍋","🔔","7"],
         step(dt,w,h){
-          // 하단 버튼 클릭 영역 정확히
           if(lastClick.hit){
             const {x,y} = lastClick; lastClick.hit=false;
             if(y > h-110){
@@ -573,7 +622,6 @@
         draw(w,h){
           ctx.fillStyle="#0a1022"; ctx.fillRect(0,0,w,h);
 
-          // 릴 박스 3개 고정 폭
           const boxW = w * 0.18;
           const gap  = w * 0.05;
           const totalW = boxW*3 + gap*2;
@@ -598,7 +646,6 @@
             ctx.fillText(String(this.reels[i]), x + boxW/2, boxY + boxH/2);
           }
 
-          // 하단 버튼 3등분
           const barH = 110;
           const barY = h - barH;
           ctx.fillStyle="rgba(255,255,255,0.08)";
@@ -625,7 +672,6 @@
             ctx.fillText(labels[i], x + bw/2, btnY + btnH/2);
           }
 
-          // reset
           ctx.textAlign = "left";
           ctx.textBaseline = "alphabetic";
         }

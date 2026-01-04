@@ -4,16 +4,116 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Web Arcade</title>
-  <link rel="stylesheet" href="/styles.css" />
   <link rel="icon" href="data:," />
+
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#070a12; color:#e9eefc; }
+    .wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .card {
+      width:min(1100px, 100%);
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:16px;
+      padding:18px;
+      box-shadow:0 12px 40px rgba(0,0,0,0.35);
+    }
+    .hrow { display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+    h1 { margin:0 0 10px; font-size:22px; }
+    h2 { margin:0; font-size:16px; }
+    p { margin:0; opacity:.85; line-height:1.5; }
+
+    .grid { display:grid; grid-template-columns: 1.1fr 0.9fr; gap:12px; margin-top:12px; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: rgba(0,0,0,0.25);
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:14px;
+      padding:12px;
+    }
+
+    .btn {
+      border:1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.08);
+      color:#e9eefc;
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:900;
+      letter-spacing: .2px;
+    }
+    .btn:hover { background: rgba(255,255,255,0.12); }
+    .btn.primary { background: rgba(120,200,255,0.15); border-color: rgba(120,200,255,0.35); }
+    .btn.danger  { background: rgba(255,120,120,0.14); border-color: rgba(255,120,120,0.35); }
+    .btn.tiny { padding:6px 10px; border-radius:10px; font-weight:900; }
+
+    input {
+      border:1px solid rgba(255,255,255,0.16);
+      background: rgba(0,0,0,0.25);
+      color:#e9eefc;
+      padding:10px 12px;
+      border-radius:12px;
+      outline:none;
+    }
+
+    .msg { font-size:13px; white-space:pre-wrap; opacity:.95; margin-top:10px; }
+    .msg.err { color:#ff8a8a; }
+    .msg.ok { color:#8dffb3; }
+    .small { font-size:12px; opacity:.78; line-height:1.4; margin-top:6px; }
+    .badge { font-size:12px; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,0.14); display:inline-flex; align-items:center; gap:8px; }
+    code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 8px; }
+
+    table { width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
+    th, td { padding:8px 8px; border-bottom:1px solid rgba(255,255,255,0.10); text-align:left; vertical-align:middle; }
+    th { opacity:.85; font-weight:900; }
+
+    tr.top1 { background: rgba(255, 80, 80, 0.18); }   /* 1등 빨강 */
+    tr.top2 { background: rgba(255, 230, 80, 0.14); }  /* 2등 노랑 */
+    tr.top3 { background: rgba(110, 255, 170, 0.14); } /* 3등 초록 */
+
+    .rankpill {
+      display:inline-block;
+      min-width: 44px;
+      text-align:center;
+      font-weight:900;
+      border-radius: 999px;
+      padding: 2px 10px;
+      border:1px solid rgba(255,255,255,0.18);
+      background: rgba(0,0,0,0.18);
+    }
+
+    /* ===== Pretty Rank Badge ===== */
+    .tier {
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      font-weight:950;
+      border-radius:999px;
+      padding:6px 12px;
+      border:1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.18);
+      white-space:nowrap;
+    }
+    .tier .ic { font-size:14px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.25)); }
+    .tier-rookie   { background: linear-gradient(180deg, rgba(180,190,210,0.16), rgba(80,90,110,0.08)); border-color: rgba(200,210,230,0.18); }
+    .tier-bronze   { background: linear-gradient(180deg, rgba(205,127,50,0.22), rgba(205,127,50,0.07)); border-color: rgba(205,127,50,0.25); }
+    .tier-silver   { background: linear-gradient(180deg, rgba(205,220,235,0.22), rgba(150,170,190,0.08)); border-color: rgba(220,235,255,0.20); }
+    .tier-gold     { background: linear-gradient(180deg, rgba(255,215,0,0.20), rgba(255,215,0,0.06)); border-color: rgba(255,215,0,0.22); }
+    .tier-platinum { background: linear-gradient(180deg, rgba(150,255,240,0.18), rgba(120,200,255,0.08)); border-color: rgba(150,255,240,0.20); }
+    .tier-diamond  { background: linear-gradient(180deg, rgba(160,170,255,0.18), rgba(200,120,255,0.08)); border-color: rgba(180,160,255,0.20); }
+    .tier-legend   { background: linear-gradient(180deg, rgba(255,120,160,0.18), rgba(255,230,120,0.08)); border-color: rgba(255,200,160,0.22); }
+  </style>
 </head>
+
 <body>
   <div class="wrap">
     <div class="card">
       <div class="hrow">
         <div>
           <h1>Web Arcade</h1>
-          <p>이기면 Score/Coins 상승, 지면 하락. 슬롯은 코인 배팅으로 코인을 늘릴 수 있어요.</p>
+          <p>이기면 Score/Coins ↑, 지면 ↓. 슬롯은 코인 배팅으로 코인을 늘릴 수 있어요.</p>
         </div>
         <div class="badge" id="authBadge">상태: 확인 중…</div>
       </div>
@@ -68,7 +168,7 @@
           </div>
 
           <div class="msg" id="rankMsg"></div>
-          <div id="board" style="margin-top:10px;"></div>
+          <div id="board"></div>
         </div>
       </div>
     </div>
@@ -77,10 +177,12 @@
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-    // === 너 프로젝트 값으로 유지 ===
+    // === 너 프로젝트 값 ===
     const SUPABASE_URL = "https://jwkjsmlicirmuujsmdfi.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_YfPtLavytOMWG5gHr7pEDg_Dy3j8Wld";
-    const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/leaderboard`;
+
+    // ✅ 함수 이름이 bright-handler 라서 URL도 bright-handler
+    const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/bright-handler`;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
@@ -95,21 +197,24 @@
     const LS_SCORE = "arcade_total_score_v3";
     const LS_COINS = "arcade_total_coins_v3";
     const LS_NAME  = "arcade_name_v3";
-
     function getScore(){ return Number(localStorage.getItem(LS_SCORE)||"0")||0; }
     function getCoins(){ return Number(localStorage.getItem(LS_COINS)||"200")||200; }
     function setScore(v){ localStorage.setItem(LS_SCORE, String(Math.max(0, Math.trunc(v)))); }
     function setCoins(v){ localStorage.setItem(LS_COINS, String(Math.max(0, Math.trunc(v)))); }
 
-    // ===== Rank Title (점수 기반 티어) =====
-    function rankTitle(score){
-      if(score >= 5000) return "Legend";
-      if(score >= 2500) return "Diamond";
-      if(score >= 1200) return "Platinum";
-      if(score >= 600)  return "Gold";
-      if(score >= 250)  return "Silver";
-      if(score >= 80)   return "Bronze";
-      return "Rookie";
+    // ===== Pretty Rank =====
+    function rankInfo(score){
+      if(score >= 5000) return { key:"legend",   name:"LEGEND",   icon:"👑" };
+      if(score >= 2500) return { key:"diamond",  name:"DIAMOND",  icon:"💎" };
+      if(score >= 1200) return { key:"platinum", name:"PLATINUM", icon:"⚡" };
+      if(score >= 600)  return { key:"gold",     name:"GOLD",     icon:"🏅" };
+      if(score >= 250)  return { key:"silver",   name:"SILVER",   icon:"🛡️" };
+      if(score >= 80)   return { key:"bronze",   name:"BRONZE",   icon:"🔥" };
+      return             { key:"rookie",   name:"ROOKIE",   icon:"🌱" };
+    }
+    function tierBadge(score){
+      const r = rankInfo(score);
+      return `<span class="tier tier-${r.key}"><span class="ic">${r.icon}</span>${r.name}</span>`;
     }
 
     // ===== UI refs =====
@@ -168,26 +273,27 @@
       const av=avatarUrl(s), dn=displayName(s), uid=s.user.id;
       const score=getScore(), coins=getCoins();
       const nick=(nameInput.value||"").trim().slice(0,12)||"Player";
-      const tier = rankTitle(score);
 
       profileBox.innerHTML = `
         <div style="display:flex; gap:12px; align-items:center;">
           <div style="width:52px;height:52px;border-radius:14px;border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.06);overflow:hidden;display:flex;align-items:center;justify-content:center;">
             ${av ? `<img src="${esc(av)}" style="width:100%;height:100%;object-fit:cover;">`
-                 : `<div style="font-weight:900;opacity:.9;">${esc((dn||"U")[0]||"U")}</div>`}
+                 : `<div style="font-weight:950;opacity:.9;">${esc((dn||"U")[0]||"U")}</div>`}
           </div>
           <div style="min-width:0;">
-            <div style="font-weight:900;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-              ${esc(dn)} <span class="badge">${tier}</span>
+            <div style="font-weight:950;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              ${esc(dn)} ${tierBadge(score)}
             </div>
             <div class="small" style="margin-top:2px;">user_id: <code>${esc(uid.slice(0,8))}</code>…</div>
           </div>
         </div>
+
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
           <span class="badge">로컬 Score: <b>${score}</b></span>
           <span class="badge">로컬 Coins: <b>${coins}</b></span>
           <span class="badge">닉네임: <b>${esc(nick)}</b></span>
         </div>
+
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
           <button class="btn danger" id="logoutBtn">로그아웃</button>
         </div>
@@ -245,24 +351,26 @@
       });
     });
 
-    // ===== Edge Function call helper =====
+    // ===== Edge Function helper =====
     async function callFn(body){
       const { data } = await supabase.auth.getSession();
       const token = data?.session?.access_token;
       if(!token) throw new Error("No auth session");
+
       const res = await fetch(FUNCTION_URL,{
         method:"POST",
         headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token },
         body: JSON.stringify(body)
       });
+
       const j = await res.json().catch(()=> ({}));
       if(!res.ok || j.ok===false) throw new Error(j.error||j.message||("HTTP "+res.status));
       return j;
     }
 
-    // ===== Scoreboard state (sorting) =====
-    let sortBy = "score"; // "rank"|"score"|"coins"|"time"
-    let sortDir = "desc"; // "asc"|"desc"
+    // ===== Scoreboard sorting =====
+    let sortBy = "score"; // rank|score|coins|time
+    let sortDir = "desc";
 
     let serverTop=[], serverMe=null, serverRank=null;
 
@@ -270,7 +378,6 @@
       const localScore=getScore(), localCoins=getCoins();
       const localName=(nameInput.value||"").trim().slice(0,12)||"Player";
 
-      // 서버 top은 이미 정렬되어서 옴
       const rows = (serverTop||[]).map((r,i)=>({
         rank:i+1,
         name:r.name,
@@ -294,7 +401,7 @@
         <tr><td colspan="5" style="opacity:.55;">— 내 서버 순위 —</td></tr>
         <tr style="outline:1px solid rgba(120,200,255,0.35);">
           <td><span class="rankpill">#${serverRank ?? "-"}</span></td>
-          <td>${esc(serverMe.name)} <span class="badge">ME</span> <span class="badge">${rankTitle(serverMe.best_score)}</span></td>
+          <td>${esc(serverMe.name)} <span class="badge">ME</span> ${tierBadge(serverMe.best_score)}</td>
           <td>${serverMe.best_score}</td>
           <td>${serverMe.best_coins}</td>
           <td>${esc(new Date(serverMe.updated_at).toLocaleString())}</td>
@@ -308,7 +415,7 @@
               const cls = r.rank===1?"top1":r.rank===2?"top2":r.rank===3?"top3":"";
               return `<tr class="${cls}">
                 <td><span class="rankpill">#${r.rank}</span></td>
-                <td>${esc(r.name)} <span class="badge">${rankTitle(r.score)}</span></td>
+                <td>${esc(r.name)} ${tierBadge(r.score)}</td>
                 <td>${r.score}</td>
                 <td>${r.coins}</td>
                 <td>${esc(r.time)}</td>
@@ -320,7 +427,7 @@
             <tr><td colspan="5" style="opacity:.55;">— 내 로컬 누적 —</td></tr>
             <tr>
               <td><span class="rankpill">ME</span></td>
-              <td>${esc(localName)} (local) <span class="badge">${rankTitle(localScore)}</span></td>
+              <td>${esc(localName)} (local) ${tierBadge(localScore)}</td>
               <td>${localScore}</td>
               <td>${localCoins}</td>
               <td>-</td>
@@ -329,12 +436,11 @@
         </table>
       `;
 
-      // 헤더 클릭 정렬
       boardEl.querySelectorAll("[data-sort]").forEach(b=>{
         b.onclick = async ()=>{
           const k = b.getAttribute("data-sort");
           if (sortBy === k) sortDir = (sortDir === "asc" ? "desc" : "asc");
-          else sortBy = k, sortDir = "desc";
+          else { sortBy = k; sortDir = "desc"; }
           await syncAll();
         };
       });
@@ -343,7 +449,6 @@
     async function syncAll(){
       setMsg(rankMsg,"서버 데이터 불러오는 중...");
       try{
-        // 서버에서 정렬된 top10 받기
         const top = await callFn({ action:"top", limit:10, sortBy, sortDir });
         serverTop = top.data || [];
         const me = await callFn({ action:"me" });
@@ -362,8 +467,10 @@
       try{
         const { data } = await supabase.auth.getSession();
         if(!data?.session) return setMsg(rankMsg,"먼저 로그인해줘.",false);
+
         const name=(nameInput.value||"").trim().slice(0,12)||"Player";
         await callFn({ action:"submit", name, score:getScore(), coins:getCoins() });
+
         setMsg(rankMsg,"제출 완료. Sync 중...",true);
         await syncAll();
       }catch(e){
@@ -385,7 +492,7 @@
       setScore(getScore()+ds);
       setCoins(getCoins()+dc);
       setMsg(msgEl,
-        `게임: ${gameFrom}\n결과: ${result.toUpperCase()}\nScore 변화: ${ds>=0?"+":""}${ds}\nCoins 변화: ${dc>=0?"+":""}${dc}\n누적 Score=${getScore()} / Coins=${getCoins()} / Rank=${rankTitle(getScore())}`,
+        `게임: ${gameFrom}\n결과: ${result.toUpperCase()}\nScore 변화: ${ds>=0?"+":""}${ds}\nCoins 변화: ${dc>=0?"+":""}${dc}\n누적 Score=${getScore()} / Coins=${getCoins()}`,
         true
       );
       ["result","g","ds","dc"].forEach(k=>u.searchParams.delete(k));
