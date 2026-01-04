@@ -2,321 +2,103 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Web Arcade</title>
-  <link rel="stylesheet" href="/styles.css" />
   <link rel="icon" href="data:," />
+  <style>
+    body { margin:0; font-family:sans-serif; background:#0b1020; color:#fff; }
+    .wrap { min-height:100vh; display:flex; justify-content:center; align-items:center; }
+    .card { width:420px; padding:20px; border-radius:12px; background:#111836; }
+    button { padding:10px; margin:6px 0; width:100%; font-weight:bold; cursor:pointer; }
+  </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <div class="hrow">
-        <div>
-          <h1>Web Arcade</h1>
-          <p>점수(Score) + 코인(Coins)을 모아서 랭킹 경쟁! 슬롯은 코인 배팅으로 늘릴 수 있어요.</p>
-        </div>
-        <div class="badge" id="authBadge">상태: 확인 중…</div>
-      </div>
+<div class="wrap">
+  <div class="card">
+    <h2>Web Arcade</h2>
 
-      <div class="grid">
-        <div class="panel">
-          <h2>프로필</h2>
-          <div id="profileBox" style="margin-top:10px;"></div>
-
-          <div id="loginBox" style="margin-top:10px;">
-            <div class="small">로그인하면 게임을 시작할 수 있어요.</div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-              <button class="btn" id="guestBtn">게스트</button>
-              <button class="btn primary" id="googleBtn">Google</button>
-            </div>
-            <div class="msg" id="msg"></div>
-          </div>
-
-          <hr style="border:0;border-top:1px solid rgba(255,255,255,0.10); margin:14px 0;">
-
-          <h2>게임 선택</h2>
-          <div class="small">게임별 승/패 보상이 다릅니다.</div>
-
-          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-            <button class="btn" data-game="dodge">Dodge</button>
-            <button class="btn" data-game="clicker">Clicker</button>
-            <button class="btn" data-game="aim">Aim</button>
-            <button class="btn" data-game="rhythm">Rhythm</button>
-            <button class="btn" data-game="puzzle">Puzzle</button>
-            <button class="btn" data-game="tetris">Tetris</button>
-            <button class="btn primary" data-game="slot">Slot (배팅)</button>
-          </div>
-
-          <div class="small" id="rewardHint" style="margin-top:10px;"></div>
-        </div>
-
-        <div class="panel">
-          <div class="hrow">
-            <h2>스코어보드</h2>
-            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-              <input id="nameInput" placeholder="닉네임(제출용)" maxlength="12" />
-              <button class="btn" id="syncBtn">Sync</button>
-              <button class="btn primary" id="submitBtn">서버 제출</button>
-            </div>
-          </div>
-
-          <div class="small">
-            서버 Top10 + 내 로컬(누적 Score/Coins) + 내 서버 순위/최고 기록 표시.
-          </div>
-
-          <div class="msg" id="rankMsg"></div>
-          <div id="board" style="margin-top:10px;"></div>
-        </div>
-      </div>
+    <div id="authBox">
+      <button id="guestBtn">게스트 로그인</button>
+      <button id="googleBtn">Google 로그인</button>
     </div>
+
+    <div id="userBox" style="display:none;">
+      <p id="userInfo"></p>
+      <button data-game="slot">슬롯 게임</button>
+      <button data-game="dodge">닷지 게임</button>
+      <button id="logoutBtn">로그아웃</button>
+    </div>
+
+    <pre id="msg"></pre>
   </div>
+</div>
 
-  <script type="module">
-    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-    // ✅ 너 프로젝트로 고정 (NXDOMAIN 해결)
-    const SUPABASE_URL = "https://jwkjsmlicirmuujsmdfi.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_YfPtLavytOMWG5gHr7pEDg_Dy3j8Wld";
-    const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/leaderboard`;
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const SUPABASE_URL = "https://jwkjsmlicirmuujsmdfi.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_YfPtLavytOMWG5gHr7pEDg_Dy3j8Wld";
 
-    const LS_SCORE = "arcade_total_score_v2";
-    const LS_COINS = "arcade_total_coins_v2";
-    const LS_NAME  = "arcade_name_v2";
-
-    const authBadge = document.getElementById("authBadge");
-    const profileBox = document.getElementById("profileBox");
-    const loginBox = document.getElementById("loginBox");
-    const msgEl = document.getElementById("msg");
-
-    const rankMsg = document.getElementById("rankMsg");
-    const boardEl = document.getElementById("board");
-    const nameInput = document.getElementById("nameInput");
-    const rewardHint = document.getElementById("rewardHint");
-
-    function getScore(){ return Number(localStorage.getItem(LS_SCORE)||"0")||0; }
-    function getCoins(){ return Number(localStorage.getItem(LS_COINS)||"200")||200; }
-    function setScore(v){ localStorage.setItem(LS_SCORE, String(Math.max(0, Math.trunc(v)))); }
-    function setCoins(v){ localStorage.setItem(LS_COINS, String(Math.max(0, Math.trunc(v)))); }
-
-    function esc(s){ return String(s).replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m])); }
-    function setMsg(el, t, ok=false){ el.className="msg "+(ok?"ok":"err"); el.textContent=t||""; }
-
-    const GAME_RULES = {
-      dodge:  { winS: 40, loseS: -15, winC: 10, loseC: -5,  desc: "10초 생존하면 WIN" },
-      clicker:{ winS: 30, loseS: -10, winC: 5,  loseC: -3,  desc: "제한시간 내 목표 클릭" },
-      aim:    { winS: 35, loseS: -12, winC: 8,  loseC: -4,  desc: "타겟 맞히기" },
-      rhythm: { winS: 55, loseS: -20, winC: 12, loseC: -6,  desc: "타이밍 Space" },
-      puzzle: { winS: 60, loseS: -25, winC: 15, loseC: -8,  desc: "슬라이딩 퍼즐" },
-      tetris: { winS: 70, loseS: -30, winC: 18, loseC: -10, desc: "라인 목표" },
-      slot:   { winS: 10, loseS: -5,  winC: 0,  loseC: 0,   desc: "코인 배팅 슬롯" },
-    };
-
-    function renderRewardHint(){
-      rewardHint.innerHTML = Object.entries(GAME_RULES).map(([k,v]) =>
-        `<b>${k}</b>: WIN (S ${v.winS>=0?"+":""}${v.winS}, C ${v.winC>=0?"+":""}${v.winC}) / LOSE (S ${v.loseS}, C ${v.loseC}) - ${esc(v.desc)}`
-      ).join("<br/>");
+const supabase = createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: localStorage
     }
+  }
+);
 
-    let currentSession = null;
-    function avatarUrl(s){ const md=s?.user?.user_metadata||{}; return md.avatar_url||md.picture||null; }
-    function displayName(s){ const md=s?.user?.user_metadata||{}; return (md.full_name||md.name||md.email||"Guest"); }
-    function providerName(s){ return s?.user?.app_metadata?.provider || (s?.user?.is_anonymous ? "anonymous" : "unknown"); }
+const authBox = document.getElementById("authBox");
+const userBox = document.getElementById("userBox");
+const userInfo = document.getElementById("userInfo");
+const msg = document.getElementById("msg");
 
-    function renderProfile(s){
-      if(!s){
-        authBadge.textContent = "상태: 로그인 안 됨";
-        profileBox.innerHTML = `<div class="small">로그인하면 프로필이 표시돼요.</div>`;
-        loginBox.style.display = "block";
-        return;
-      }
-      loginBox.style.display = "none";
-      authBadge.textContent = `상태: 로그인됨 (${providerName(s)})`;
+function render(session) {
+  if (!session) {
+    authBox.style.display = "block";
+    userBox.style.display = "none";
+  } else {
+    authBox.style.display = "none";
+    userBox.style.display = "block";
+    userInfo.textContent = `로그인됨: ${session.user.id.slice(0,8)} (${session.user.is_anonymous ? "Guest" : "Google"})`;
+  }
+}
 
-      const av=avatarUrl(s), dn=displayName(s), uid=s.user.id;
-      const score=getScore(), coins=getCoins();
-      const nick=(nameInput.value||"").trim().slice(0,12)||"Player";
+const { data } = await supabase.auth.getSession();
+render(data.session);
 
-      profileBox.innerHTML = `
-        <div style="display:flex; gap:12px; align-items:center;">
-          <div style="width:52px;height:52px;border-radius:14px;border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.06);overflow:hidden;display:flex;align-items:center;justify-content:center;">
-            ${av ? `<img src="${esc(av)}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="font-weight:900;opacity:.9;">${esc((dn||"U")[0]||"U")}</div>`}
-          </div>
-          <div style="min-width:0;">
-            <div style="font-weight:900;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(dn)}</div>
-            <div class="small" style="margin-top:2px;">user_id: <code>${esc(uid.slice(0,8))}</code>…</div>
-          </div>
-        </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-          <span class="badge">로컬 Score: <b>${score}</b></span>
-          <span class="badge">로컬 Coins: <b>${coins}</b></span>
-          <span class="badge">닉네임: <b>${esc(nick)}</b></span>
-        </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-          <button class="btn danger" id="logoutBtn">로그아웃</button>
-        </div>
-      `;
-      document.getElementById("logoutBtn").onclick = async ()=>{
-        await supabase.auth.signOut();
-        currentSession=null;
-        renderProfile(null);
-        renderBoard();
-        setMsg(msgEl,"로그아웃됨",true);
-      };
-    }
+supabase.auth.onAuthStateChange((_e, session) => {
+  render(session);
+});
 
-    // 로그인 버튼
-    document.getElementById("guestBtn").onclick = async ()=>{
-      setMsg(msgEl,"");
-      const { error } = await supabase.auth.signInAnonymously();
-      if(error) return setMsg(msgEl,"게스트 로그인 실패:\n"+error.message,false);
-      const { data } = await supabase.auth.getSession();
-      currentSession=data.session;
-      renderProfile(currentSession);
-      setMsg(msgEl,"게스트 로그인 성공!",true);
-    };
+guestBtn.onclick = async () => {
+  msg.textContent = "";
+  const { error } = await supabase.auth.signInAnonymously();
+  if (error) msg.textContent = error.message;
+};
 
-    document.getElementById("googleBtn").onclick = async ()=>{
-      setMsg(msgEl,"");
-      const redirectTo = `${location.origin}/index.html`;
-      const { error } = await supabase.auth.signInWithOAuth({ provider:"google", options:{ redirectTo } });
-      if(error) setMsg(msgEl,"Google 로그인 시작 실패:\n"+error.message,false);
-    };
+googleBtn.onclick = async () => {
+  await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: location.origin + "/index.html" }
+  });
+};
 
-    supabase.auth.onAuthStateChange((_, session)=>{
-      currentSession=session;
-      renderProfile(currentSession);
-    });
+logoutBtn.onclick = async () => {
+  await supabase.auth.signOut();
+};
 
-    // 게임 진입
-    document.querySelectorAll("[data-game]").forEach(btn=>{
-      btn.addEventListener("click", async ()=>{
-        const { data } = await supabase.auth.getSession();
-        if(!data?.session) return setMsg(msgEl,"먼저 로그인해줘.",false);
-        const g = btn.getAttribute("data-game");
-        location.href = `/game.html?g=${encodeURIComponent(g)}`;
-      });
-    });
-
-    // 스코어보드(서버)
-    async function callFn(body){
-      const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token;
-      if(!token) throw new Error("No auth session");
-      const res = await fetch(FUNCTION_URL,{
-        method:"POST",
-        headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token },
-        body: JSON.stringify(body)
-      });
-      const j = await res.json().catch(()=> ({}));
-      if(!res.ok || j.ok===false) throw new Error(j.error||j.message||("HTTP "+res.status));
-      return j;
-    }
-
-    let serverTop=[], serverMe=null, serverRank=null;
-
-    function renderBoard(){
-      const localScore=getScore(), localCoins=getCoins();
-      const localName=(nameInput.value||"").trim().slice(0,12)||"Player";
-
-      const rows = (serverTop||[]).map((r,i)=>({
-        rank:i+1, name:r.name, score:r.best_score, coins:r.best_coins, time:r.updated_at?new Date(r.updated_at).toLocaleString():""
-      }));
-
-      const myServerRow = serverMe ? `
-        <tr><td colspan="5" style="opacity:.55;">— 내 서버 기록 —</td></tr>
-        <tr>
-          <td><span class="rankpill">#${serverRank ?? "-"}</span></td>
-          <td>${esc(serverMe.name)}</td>
-          <td>${serverMe.best_score}</td>
-          <td>${serverMe.best_coins}</td>
-          <td>${esc(new Date(serverMe.updated_at).toLocaleString())}</td>
-        </tr>` : "";
-
-      boardEl.innerHTML = `
-        <table>
-          <thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Coins</th><th>Time</th></tr></thead>
-          <tbody>
-            ${rows.map(r=>{
-              const cls = r.rank===1?"top1":r.rank===2?"top2":r.rank===3?"top3":"";
-              return `<tr class="${cls}">
-                <td><span class="rankpill">#${r.rank}</span></td>
-                <td>${esc(r.name)}</td>
-                <td>${r.score}</td>
-                <td>${r.coins}</td>
-                <td>${esc(r.time)}</td>
-              </tr>`;
-            }).join("")}
-            ${myServerRow}
-            <tr><td colspan="5" style="opacity:.55;">— 내 로컬 누적 —</td></tr>
-            <tr>
-              <td><span class="rankpill">ME</span></td>
-              <td>${esc(localName)} (local)</td>
-              <td>${localScore}</td>
-              <td>${localCoins}</td>
-              <td>-</td>
-            </tr>
-          </tbody>
-        </table>`;
-    }
-
-    async function syncAll(){
-      setMsg(rankMsg,"서버 데이터 불러오는 중...");
-      try{
-        const top = await callFn({ action:"top", limit:10 });
-        serverTop = top.data || [];
-        const me = await callFn({ action:"me" });
-        serverMe = me.me || null;
-        serverRank = me.rank || null;
-        setMsg(rankMsg,"서버 동기화 완료",true);
-        renderBoard();
-      }catch(e){
-        setMsg(rankMsg,"Sync 실패: "+(e?.message||e),false);
-      }
-    }
-
-    async function submitBest(){
-      setMsg(rankMsg,"서버에 제출 중(최고 기록만 저장)...");
-      try{
-        const { data } = await supabase.auth.getSession();
-        if(!data?.session) return setMsg(rankMsg,"먼저 로그인해줘.",false);
-        const name=(nameInput.value||"").trim().slice(0,12)||"Player";
-        await callFn({ action:"submit", name, score:getScore(), coins:getCoins() });
-        setMsg(rankMsg,"제출 완료. Sync 중...",true);
-        await syncAll();
-      }catch(e){
-        setMsg(rankMsg,"제출 실패: "+(e?.message||e),false);
-      }
-    }
-
-    document.getElementById("syncBtn").onclick = syncAll;
-    document.getElementById("submitBtn").onclick = submitBest;
-
-    // 게임 결과 반영
-    const u = new URL(location.href);
-    const result = u.searchParams.get("result");
-    const g = u.searchParams.get("g") || "";
-    const ds = Number(u.searchParams.get("ds")||"0");
-    const dc = Number(u.searchParams.get("dc")||"0");
-
-    if(result==="win"||result==="lose"){
-      setScore(getScore()+ds);
-      setCoins(getCoins()+dc);
-      setMsg(msgEl, `게임: ${g}\n결과: ${result.toUpperCase()}\nScore 변화: ${ds>=0?"+":""}${ds}\nCoins 변화: ${dc>=0?"+":""}${dc}\n누적 Score=${getScore()} / Coins=${getCoins()}`, true);
-      ["result","g","ds","dc"].forEach(k=>u.searchParams.delete(k));
-      history.replaceState({}, "", u.pathname + (u.searchParams.toString()?("?"+u.searchParams.toString()):""));
-    }
-
-    // 닉네임 저장
-    const savedName = localStorage.getItem(LS_NAME);
-    if(savedName) nameInput.value = savedName;
-    nameInput.addEventListener("input", ()=> localStorage.setItem(LS_NAME, (nameInput.value||"").trim().slice(0,12)));
-
-    renderRewardHint();
-    const init = await supabase.auth.getSession();
-    currentSession = init.data?.session || null;
-    renderProfile(currentSession);
-    renderBoard();
-  </script>
+document.querySelectorAll("[data-game]").forEach(btn => {
+  btn.onclick = async () => {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) return alert("로그인 필요");
+    location.href = `/game.html?g=${btn.dataset.game}`;
+  };
+});
+</script>
 </body>
 </html>
